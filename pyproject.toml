@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kokoro-stream-tts"
+version = "0.1.0"
+description = "Streaming Kokoro TTS service with sentence-aware chunking and binary PCM framing"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "flask>=3.0",
+    "prometheus-client>=0.20",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+kokoro = ["onnxruntime>=1.18", "misaki[en]>=0.9", "phonemizer>=3.2"]
+kafka = ["confluent-kafka>=2.4", "boto3>=1.34"]
+serve = ["gunicorn>=22.0"]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
