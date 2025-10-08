@@ -62,3 +62,32 @@ def ordinal(value: int) -> str:
     else:
         words[-1] = last + "th"
     return " ".join(words)
+
+
+def digits(text: str) -> str:
+    spoken: list[str] = []
+    for char in text:
+        if char.isdigit():
+            spoken.append("oh" if char == "0" else ONES[int(char)])
+    return " ".join(spoken)
+
+
+def decimal(text: str) -> str:
+    whole, _, fraction = text.partition(".")
+    whole_words = cardinal(int(whole)) if whole else ONES[0]
+    if not fraction:
+        return whole_words
+    fraction_words = " ".join(ONES[int(char)] for char in fraction if char.isdigit())
+    return f"{whole_words} point {fraction_words}"
+
+
+def year(value: int) -> str:
+    if 2000 <= value <= 2009:
+        return cardinal(value)
+    if value % 100 == 0 and value >= 1000:
+        return cardinal(value)
+    high, low = divmod(value, 100)
+    if low == 0:
+        return f"{cardinal(high)} hundred"
+    low_words = f"oh {ONES[low]}" if low < 10 else cardinal(low)
+    return f"{cardinal(high)} {low_words}"

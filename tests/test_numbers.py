@@ -38,3 +38,35 @@ def test_cardinal(value, expected):
 )
 def test_ordinal(value, expected):
     assert ordinal(value) == expected
+
+
+from kokoro_stream.text.numbers import decimal, digits, year
+
+
+def test_digits_reads_zero_as_oh():
+    assert digits("2057") == "two oh five seven"
+
+
+def test_digits_skips_separators():
+    assert digits("555-0142") == "five five five oh one four two"
+
+
+def test_decimal():
+    assert decimal("3.14") == "three point one four"
+    assert decimal("0.5") == "zero point five"
+    assert decimal(".25") == "zero point two five"
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (1999, "nineteen ninety nine"),
+        (1905, "nineteen oh five"),
+        (2000, "two thousand"),
+        (2007, "two thousand seven"),
+        (2024, "twenty twenty four"),
+        (1900, "nineteen hundred"),
+    ],
+)
+def test_year(value, expected):
+    assert year(value) == expected
