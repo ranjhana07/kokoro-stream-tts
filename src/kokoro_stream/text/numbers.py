@@ -84,7 +84,7 @@ def decimal(text: str) -> str:
 def year(value: int) -> str:
     if 2000 <= value <= 2009:
         return cardinal(value)
-    if value % 100 == 0 and value >= 1000:
+    if value % 1000 == 0:
         return cardinal(value)
     high, low = divmod(value, 100)
     if low == 0:
