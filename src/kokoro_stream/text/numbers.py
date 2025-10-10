@@ -72,6 +72,10 @@ def digits(text: str) -> str:
     return " ".join(spoken)
 
 
+def digits_plain(text: str) -> str:
+    return " ".join(ONES[int(char)] for char in text if char.isdigit())
+
+
 def decimal(text: str) -> str:
     whole, _, fraction = text.partition(".")
     whole_words = cardinal(int(whole)) if whole else ONES[0]
