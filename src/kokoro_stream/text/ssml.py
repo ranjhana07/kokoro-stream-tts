@@ -19,6 +19,11 @@ SENTENCE_PAUSE_MS = 250
 PARAGRAPH_PAUSE_MS = 600
 MAX_BREAK_MS = 10_000
 
+RATE_KEYWORDS = {"x-slow": 0.5, "slow": 0.75, "medium": 1.0, "fast": 1.25, "x-fast": 1.5}
+EMPHASIS_SPEED = {"strong": 0.88, "moderate": 0.94, "none": 1.0, "reduced": 1.06}
+MIN_SPEED = 0.5
+MAX_SPEED = 2.0
+
 TIME_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(ms|s)?\s*$", re.IGNORECASE)
 WHITESPACE_PATTERN = re.compile(r"\s+")
 
@@ -58,6 +63,25 @@ def parse_time(value: str) -> int:
     unit = (match.group(2) or "s").lower()
     milliseconds = amount if unit == "ms" else amount * 1000
     return min(int(round(milliseconds)), MAX_BREAK_MS)
+
+
+def parse_rate(value: str) -> float:
+    cleaned = value.strip().lower()
+    if cleaned in RATE_KEYWORDS:
+        return RATE_KEYWORDS[cleaned]
+    if cleaned.endswith("%"):
+        try:
+            amount = float(cleaned[:-1])
+        except ValueError as error:
+            raise SSMLError(f"invalid prosody rate: {value!r}") from error
+        if cleaned[0] in "+-":
+            return 1.0 + amount / 100.0
+        return amount / 100.0
+    raise SSMLError(f"invalid prosody rate: {value!r}")
+
+
+def clamp_speed(speed: float) -> float:
+    return max(MIN_SPEED, min(MAX_SPEED, speed))
 
 
 class SegmentBuilder:
@@ -105,10 +129,21 @@ def walk(element: ElementTree.Element, context: Context, builder: SegmentBuilder
     if tag == "break":
         builder.add_pause(break_duration(element))
         return
-    builder.add_text(element.text, context)
+    if tag == "sub":
+        builder.add_text(element.get("alias", "".join(element.itertext())), context)
+        return
+    inner = context
+    if tag == "prosody" and element.get("rate"):
+        inner = replace(context, speed=clamp_speed(context.speed * parse_rate(element.get("rate", ""))))
+    elif tag == "emphasis":
+        level = element.get("level", "moderate").lower()
+        if level not in EMPHASIS_SPEED:
+            raise SSMLError(f"unknown emphasis level: {level!r}")
+        inner = replace(context, speed=clamp_speed(context.speed * EMPHASIS_SPEED[level]))
+    builder.add_text(element.text, inner)
     for child in element:
-        walk(child, context, builder)
-        builder.add_text(child.tail, context)
+        walk(child, inner, builder)
+        builder.add_text(child.tail, inner)
     if tag == "s":
         builder.add_pause(SENTENCE_PAUSE_MS)
     elif tag == "p":
