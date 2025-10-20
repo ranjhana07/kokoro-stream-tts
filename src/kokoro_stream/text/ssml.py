@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, replace
 from typing import Union
 
+from kokoro_stream.text import say_as
 from kokoro_stream.text.normalizer import normalize_text
 
 BREAK_STRENGTH_MS = {
@@ -132,6 +133,9 @@ def walk(element: ElementTree.Element, context: Context, builder: SegmentBuilder
     if tag == "sub":
         builder.add_text(element.get("alias", "".join(element.itertext())), context)
         return
+    if tag == "say-as":
+        builder.add_text(read_say_as(element), context)
+        return
     inner = context
     if tag == "prosody" and element.get("rate"):
         inner = replace(context, speed=clamp_speed(context.speed * parse_rate(element.get("rate", ""))))
@@ -148,6 +152,17 @@ def walk(element: ElementTree.Element, context: Context, builder: SegmentBuilder
         builder.add_pause(SENTENCE_PAUSE_MS)
     elif tag == "p":
         builder.add_pause(PARAGRAPH_PAUSE_MS)
+
+
+def read_say_as(element: ElementTree.Element) -> str:
+    kind = element.get("interpret-as")
+    if not kind:
+        raise SSMLError("say-as requires interpret-as")
+    content = "".join(element.itertext())
+    try:
+        return say_as.interpret(kind, content, element.get("format"))
+    except say_as.SayAsError as error:
+        raise SSMLError(str(error)) from error
 
 
 def break_duration(element: ElementTree.Element) -> int:

@@ -64,11 +64,11 @@ def ordinal(value: int) -> str:
     return " ".join(words)
 
 
-def digits(text: str) -> str:
+def digits(text: str, zero: str = "oh") -> str:
     spoken: list[str] = []
     for char in text:
         if char.isdigit():
-            spoken.append("oh" if char == "0" else ONES[int(char)])
+            spoken.append(zero if char == "0" else ONES[int(char)])
     return " ".join(spoken)
 
 
