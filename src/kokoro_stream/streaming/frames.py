@@ -79,3 +79,52 @@ def encode_end(sequence: int, sample_rate: int, channels: int = 1) -> bytes:
 def encode_error(sequence: int, message: str, sample_rate: int = 0, channels: int = 1) -> bytes:
     payload = message.encode("utf-8")[:4096]
     return encode_frame(Frame(FrameType.ERROR, sequence, sample_rate, channels, payload))
+
+
+def decode_header(data: bytes) -> tuple[FrameType, int, int, int, int]:
+    magic, version, raw_type, sequence, sample_rate, channels, payload_length = HEADER.unpack(
+        data[:HEADER_SIZE]
+    )
+    if magic != MAGIC:
+        raise FrameError(f"bad magic: {magic!r}")
+    if version != VERSION:
+        raise FrameError(f"unsupported version: {version}")
+    try:
+        frame_type = FrameType(raw_type)
+    except ValueError as error:
+        raise FrameError(f"unknown frame type: {raw_type}") from error
+    if payload_length > MAX_PAYLOAD_BYTES:
+        raise FrameError("payload too large")
+    return frame_type, sequence, sample_rate, channels, payload_length
+
+
+class FrameDecoder:
+    def __init__(self) -> None:
+        self._buffer = bytearray()
+
+    def feed(self, data: bytes) -> list[Frame]:
+        self._buffer.extend(data)
+        frames: list[Frame] = []
+        while len(self._buffer) >= HEADER_SIZE:
+            frame_type, sequence, sample_rate, channels, payload_length = decode_header(
+                bytes(self._buffer[:HEADER_SIZE])
+            )
+            total = HEADER_SIZE + payload_length
+            if len(self._buffer) < total:
+                break
+            payload = bytes(self._buffer[HEADER_SIZE:total])
+            del self._buffer[:total]
+            frames.append(Frame(frame_type, sequence, sample_rate, channels, payload))
+        return frames
+
+    @property
+    def pending_bytes(self) -> int:
+        return len(self._buffer)
+
+
+def decode_all(data: bytes) -> list[Frame]:
+    decoder = FrameDecoder()
+    frames = decoder.feed(data)
+    if decoder.pending_bytes:
+        raise FrameError(f"{decoder.pending_bytes} trailing bytes")
+    return frames
