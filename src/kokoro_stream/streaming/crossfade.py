@@ -13,25 +13,27 @@ class Crossfader:
     def __init__(self, sample_rate: int, crossfade_ms: int = 60) -> None:
         self.fade_length = int(sample_rate * crossfade_ms / 1000)
         self._tail: np.ndarray | None = None
-        if self.fade_length > 0:
-            self._fade_out, self._fade_in = equal_power_curves(self.fade_length)
+        self._curves: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+
+    def curves_for(self, length: int) -> tuple[np.ndarray, np.ndarray]:
+        if length not in self._curves:
+            self._curves[length] = equal_power_curves(length)
+        return self._curves[length]
 
     def push(self, chunk: np.ndarray) -> np.ndarray:
-        if chunk.size == 0:
-            return chunk
-        if self.fade_length == 0:
+        if chunk.size == 0 or self.fade_length == 0:
             return chunk
         if self._tail is None:
             return self._hold(chunk)
-        if self._tail.size < self.fade_length or chunk.size < self.fade_length:
-            joined = np.concatenate([self._tail, chunk])
-            self._tail = None
-            return joined
-        blended = self._tail * self._fade_out + chunk[: self.fade_length] * self._fade_in
-        body = np.concatenate([blended, chunk[self.fade_length :]])
-        return self._hold(body, skip_head=False)
+        overlap = min(self._tail.size, chunk.size)
+        fade_out, fade_in = self.curves_for(overlap)
+        blended = self._tail[self._tail.size - overlap :] * fade_out + chunk[:overlap] * fade_in
+        combined = np.concatenate(
+            [self._tail[: self._tail.size - overlap], blended, chunk[overlap:]]
+        )
+        return self._hold(combined)
 
-    def _hold(self, audio: np.ndarray, skip_head: bool = False) -> np.ndarray:
+    def _hold(self, audio: np.ndarray) -> np.ndarray:
         if audio.size <= self.fade_length:
             self._tail = audio
             return audio[:0]
