@@ -10,6 +10,7 @@ from flask import Flask, Response, jsonify, request
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import EngineError, SpeechEngine
 from kokoro_stream.engine.factory import build_engine
+from kokoro_stream.service.metrics import Metrics
 from kokoro_stream.streaming.frames import float_to_pcm16
 from kokoro_stream.streaming.pipeline import StreamingSynthesizer
 from kokoro_stream.streaming.prefetch import PrefetchPool
@@ -54,10 +55,24 @@ def encode_wav(samples: np.ndarray, sample_rate: int) -> bytes:
 def create_app(settings: Settings | None = None, engine: SpeechEngine | None = None) -> Flask:
     settings = settings or Settings.from_env()
     engine = engine or build_engine(settings)
+    metrics = Metrics()
     pool = PrefetchPool(settings.prefetch_workers)
-    synthesizer = StreamingSynthesizer(engine, pool, settings)
+    synthesizer = StreamingSynthesizer(
+        engine, pool, settings, chunk_observer=metrics.chunk_latency.observe
+    )
     app = Flask(__name__)
     app.extensions["synthesizer"] = synthesizer
+    app.extensions["metrics"] = metrics
+
+    @app.after_request
+    def count_request(response: Response):
+        if request.endpoint and request.endpoint != "metrics":
+            metrics.requests.labels(request.endpoint, str(response.status_code)).inc()
+        return response
+
+    @app.get("/metrics")
+    def metrics_endpoint():
+        return Response(metrics.render(), mimetype=Metrics.content_type)
 
     @app.errorhandler(RequestError)
     @app.errorhandler(SSMLError)
