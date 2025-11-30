@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-import io
 import time
-import wave
 from dataclasses import dataclass
 from typing import Iterator
 
-import numpy as np
 from flask import Flask, Response, jsonify, request
 
+from kokoro_stream.audio_io import encode_wav
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import EngineError, SpeechEngine
 from kokoro_stream.engine.factory import build_engine
 from kokoro_stream.service.metrics import Metrics
-from kokoro_stream.streaming.frames import FrameType, float_to_pcm16
+from kokoro_stream.streaming.frames import FrameType
 from kokoro_stream.streaming.pipeline import StreamingSynthesizer
 from kokoro_stream.streaming.prefetch import PrefetchPool
 from kokoro_stream.text.ssml import SSMLError
@@ -45,16 +43,6 @@ def parse_request(payload: object, settings: Settings) -> TTSRequest:
     except (TypeError, ValueError) as error:
         raise RequestError("speed must be a number") from error
     return TTSRequest(text=text, voice=str(voice), speed=speed)
-
-
-def encode_wav(samples: np.ndarray, sample_rate: int) -> bytes:
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as writer:
-        writer.setnchannels(1)
-        writer.setsampwidth(2)
-        writer.setframerate(sample_rate)
-        writer.writeframes(float_to_pcm16(samples).tobytes())
-    return buffer.getvalue()
 
 
 def instrument_stream(frames: Iterator[bytes], metrics: Metrics, started: float) -> Iterator[bytes]:
