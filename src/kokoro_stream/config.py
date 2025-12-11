@@ -46,6 +46,7 @@ class Settings:
     kafka_status_topic: str = "tts.jobs.status"
     kafka_group: str = "tts-workers"
     output_dir: str = "output"
+    job_output: str = "output/audio"
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Settings":
@@ -70,4 +71,5 @@ class Settings:
             kafka_status_topic=env.get("KAFKA_STATUS_TOPIC", defaults.kafka_status_topic),
             kafka_group=env.get("KAFKA_GROUP", defaults.kafka_group),
             output_dir=env.get("OUTPUT_DIR", defaults.output_dir),
+            job_output=env.get("JOB_OUTPUT", defaults.job_output),
         )
