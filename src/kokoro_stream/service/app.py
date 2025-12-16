@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterator
 
 from flask import Flask, Response, jsonify, request
@@ -10,6 +11,9 @@ from kokoro_stream.audio_io import encode_wav
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import EngineError, SpeechEngine
 from kokoro_stream.engine.factory import build_engine
+from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher
+from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus, new_job_id
+from kokoro_stream.jobs.store import FileJobStore, JobStore
 from kokoro_stream.service.metrics import Metrics
 from kokoro_stream.streaming.frames import FrameType
 from kokoro_stream.streaming.pipeline import StreamingSynthesizer
@@ -63,9 +67,19 @@ def instrument_stream(frames: Iterator[bytes], metrics: Metrics, started: float)
             close()
 
 
-def create_app(settings: Settings | None = None, engine: SpeechEngine | None = None) -> Flask:
+def create_app(
+    settings: Settings | None = None,
+    engine: SpeechEngine | None = None,
+    publisher: JobPublisher | None = None,
+    job_store: JobStore | None = None,
+) -> Flask:
     settings = settings or Settings.from_env()
     engine = engine or build_engine(settings)
+    if publisher is None and settings.kafka_bootstrap:
+        publisher = KafkaJobPublisher(
+            settings.kafka_bootstrap, settings.kafka_request_topic, settings.kafka_status_topic
+        )
+    job_store = job_store or FileJobStore(Path(settings.output_dir) / "status")
     metrics = Metrics()
     pool = PrefetchPool(settings.prefetch_workers)
     synthesizer = StreamingSynthesizer(
@@ -123,5 +137,27 @@ def create_app(settings: Settings | None = None, engine: SpeechEngine | None = N
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Accel-Buffering"] = "no"
         return response
+
+    @app.post("/v1/jobs")
+    def submit_job():
+        if publisher is None:
+            return jsonify(error="async jobs are not configured"), 503
+        tts_request = parse_request(request.get_json(silent=True), settings)
+        job_id = new_job_id()
+        job_request = JobRequest(job_id, tts_request.text, tts_request.voice, tts_request.speed)
+        job_store.put(JobStatus(job_id, JobState.QUEUED))
+        try:
+            publisher.submit(job_request)
+        except Exception as error:
+            job_store.put(JobStatus(job_id, JobState.FAILED, detail=f"could not enqueue: {error}"))
+            return jsonify(error="could not enqueue job"), 503
+        return jsonify(job_id=job_id, state=JobState.QUEUED.value, status_url=f"/v1/jobs/{job_id}"), 202
+
+    @app.get("/v1/jobs/<job_id>")
+    def job_status(job_id: str):
+        status = job_store.get(job_id)
+        if status is None:
+            return jsonify(error="job not found"), 404
+        return jsonify(status.to_dict())
 
     return app
