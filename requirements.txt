@@ -1,0 +1,11 @@
+numpy>=1.26
+flask>=3.0
+prometheus-client>=0.20
+requests>=2.31
+gunicorn>=22.0
+onnxruntime>=1.18
+misaki[en]>=0.9
+phonemizer-fork>=3.3
+espeakng-loader>=0.2
+confluent-kafka>=2.4
+boto3>=1.34
