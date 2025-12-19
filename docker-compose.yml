@@ -1,0 +1,60 @@
+services:
+  kafka:
+    image: apache/kafka:3.8.0
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  tts-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment: &tts-env
+      KOKORO_ENGINE: ${KOKORO_ENGINE:-kokoro}
+      KOKORO_MODEL_PATH: /app/models/kokoro-v1.0.onnx
+      KOKORO_VOICES_PATH: /app/models/voices-v1.0.bin
+      KOKORO_VOCAB_PATH: /app/models/config.json
+      KOKORO_INTRA_OP_THREADS: ${KOKORO_INTRA_OP_THREADS:-2}
+      PREFETCH_DEPTH: ${PREFETCH_DEPTH:-3}
+      PREFETCH_WORKERS: ${PREFETCH_WORKERS:-8}
+      KAFKA_BOOTSTRAP: kafka:9092
+      OUTPUT_DIR: /app/output
+      JOB_OUTPUT: /app/output/audio
+    volumes:
+      - ./models:/app/models:ro
+      - tts-output:/app/output
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["python", "-m", "kokoro_stream.jobs.worker"]
+    environment: *tts-env
+    volumes:
+      - ./models:/app/models:ro
+      - tts-output:/app/output
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+volumes:
+  tts-output:
