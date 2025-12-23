@@ -121,3 +121,17 @@ def test_default_voice_falls_back_to_first_available():
     client = app.test_client()
     assert client.get("/v1/voices").json["default"] == "sine_low"
     assert client.post("/v1/tts", json={"text": "Hello there."}).status_code == 200
+
+
+def test_text_over_limit_is_rejected():
+    settings = Settings(default_voice="sine_mid", max_text_chars=50)
+    client = create_app(settings, SineEngine()).test_client()
+    assert client.post("/v1/tts/stream", json={"text": "x" * 51}).status_code == 400
+    assert client.post("/v1/tts/stream", json={"text": "short text"}).status_code == 200
+
+
+@pytest.mark.parametrize("speed", [0.1, 3, -1])
+def test_out_of_range_speed_is_rejected(client, speed):
+    response = client.post("/v1/tts", json={"text": "hi", "speed": speed})
+    assert response.status_code == 400
+    assert "speed" in response.json["error"]

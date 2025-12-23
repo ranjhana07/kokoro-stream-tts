@@ -22,6 +22,8 @@ from kokoro_stream.text.ssml import SSMLError
 
 
 STREAM_MIMETYPE = "application/x-kokoro-frames"
+MIN_SPEED = 0.5
+MAX_SPEED = 2.0
 
 
 class RequestError(ValueError):
@@ -35,12 +37,16 @@ class TTSRequest:
     speed: float
 
 
-def parse_request(payload: object, voices: Sequence[str], default_voice: str) -> TTSRequest:
+def parse_request(
+    payload: object, voices: Sequence[str], default_voice: str, max_text_chars: int
+) -> TTSRequest:
     if not isinstance(payload, dict):
         raise RequestError("request body must be a JSON object")
     text = payload.get("text")
     if not isinstance(text, str) or not text.strip():
         raise RequestError("text is required")
+    if len(text) > max_text_chars:
+        raise RequestError(f"text is longer than {max_text_chars} characters")
     voice = str(payload.get("voice") or default_voice)
     if voice not in voices:
         raise RequestError(f"unknown voice: {voice}")
@@ -48,6 +54,8 @@ def parse_request(payload: object, voices: Sequence[str], default_voice: str) ->
         speed = float(payload.get("speed", 1.0))
     except (TypeError, ValueError) as error:
         raise RequestError("speed must be a number") from error
+    if not MIN_SPEED <= speed <= MAX_SPEED:
+        raise RequestError(f"speed must be between {MIN_SPEED} and {MAX_SPEED}")
     return TTSRequest(text=text, voice=voice, speed=speed)
 
 
@@ -124,7 +132,7 @@ def create_app(
 
     @app.post("/v1/tts")
     def tts():
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars)
         chunks = synthesizer.prepare(tts_request.text)
         audio = synthesizer.synthesize(chunks, tts_request.voice, tts_request.speed)
         body = encode_wav(audio, engine.sample_rate)
@@ -135,7 +143,7 @@ def create_app(
     @app.post("/v1/tts/stream")
     def tts_stream():
         started = time.perf_counter()
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars)
         chunks = synthesizer.prepare(tts_request.text)
         frames = synthesizer.frames(chunks, tts_request.voice, tts_request.speed)
         response = Response(instrument_stream(frames, metrics, started), mimetype=STREAM_MIMETYPE)
@@ -148,7 +156,7 @@ def create_app(
     def submit_job():
         if publisher is None:
             return jsonify(error="async jobs are not configured"), 503
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_job_text_chars)
         job_id = new_job_id()
         job_request = JobRequest(job_id, tts_request.text, tts_request.voice, tts_request.speed)
         job_store.put(JobStatus(job_id, JobState.QUEUED))
