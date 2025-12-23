@@ -107,3 +107,17 @@ def test_metrics_reflect_traffic(client):
     assert "tts_active_streams 0.0" in body
     assert 'tts_requests_total{endpoint="tts_stream",status="200"} 1.0' in body
     assert "tts_chunk_synthesis_seconds_count" in body
+
+
+def test_unknown_voice_is_rejected(client):
+    response = client.post("/v1/tts", json={"text": "hi", "voice": "af_heart"})
+    assert response.status_code == 400
+    assert "unknown voice" in response.json["error"]
+
+
+def test_default_voice_falls_back_to_first_available():
+    settings = Settings(default_voice="af_heart")
+    app = create_app(settings, SineEngine(sample_rate=settings.sample_rate))
+    client = app.test_client()
+    assert client.get("/v1/voices").json["default"] == "sine_low"
+    assert client.post("/v1/tts", json={"text": "Hello there."}).status_code == 200

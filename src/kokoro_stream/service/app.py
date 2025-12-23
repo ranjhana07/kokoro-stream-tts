@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Sequence
 
 from flask import Flask, Response, jsonify, request
 
@@ -35,18 +35,20 @@ class TTSRequest:
     speed: float
 
 
-def parse_request(payload: object, settings: Settings) -> TTSRequest:
+def parse_request(payload: object, voices: Sequence[str], default_voice: str) -> TTSRequest:
     if not isinstance(payload, dict):
         raise RequestError("request body must be a JSON object")
     text = payload.get("text")
     if not isinstance(text, str) or not text.strip():
         raise RequestError("text is required")
-    voice = payload.get("voice") or settings.default_voice
+    voice = str(payload.get("voice") or default_voice)
+    if voice not in voices:
+        raise RequestError(f"unknown voice: {voice}")
     try:
         speed = float(payload.get("speed", 1.0))
     except (TypeError, ValueError) as error:
         raise RequestError("speed must be a number") from error
-    return TTSRequest(text=text, voice=str(voice), speed=speed)
+    return TTSRequest(text=text, voice=voice, speed=speed)
 
 
 def instrument_stream(frames: Iterator[bytes], metrics: Metrics, started: float) -> Iterator[bytes]:
@@ -80,6 +82,10 @@ def create_app(
             settings.kafka_bootstrap, settings.kafka_request_topic, settings.kafka_status_topic
         )
     job_store = job_store or FileJobStore(Path(settings.output_dir) / "status")
+    voices_available = engine.voices()
+    default_voice = (
+        settings.default_voice if settings.default_voice in voices_available else voices_available[0]
+    )
     metrics = Metrics()
     pool = PrefetchPool(settings.prefetch_workers)
     synthesizer = StreamingSynthesizer(
@@ -114,11 +120,11 @@ def create_app(
 
     @app.get("/v1/voices")
     def voices():
-        return jsonify(voices=engine.voices(), default=settings.default_voice)
+        return jsonify(voices=voices_available, default=default_voice)
 
     @app.post("/v1/tts")
     def tts():
-        tts_request = parse_request(request.get_json(silent=True), settings)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice)
         chunks = synthesizer.prepare(tts_request.text)
         audio = synthesizer.synthesize(chunks, tts_request.voice, tts_request.speed)
         body = encode_wav(audio, engine.sample_rate)
@@ -129,7 +135,7 @@ def create_app(
     @app.post("/v1/tts/stream")
     def tts_stream():
         started = time.perf_counter()
-        tts_request = parse_request(request.get_json(silent=True), settings)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice)
         chunks = synthesizer.prepare(tts_request.text)
         frames = synthesizer.frames(chunks, tts_request.voice, tts_request.speed)
         response = Response(instrument_stream(frames, metrics, started), mimetype=STREAM_MIMETYPE)
@@ -142,7 +148,7 @@ def create_app(
     def submit_job():
         if publisher is None:
             return jsonify(error="async jobs are not configured"), 503
-        tts_request = parse_request(request.get_json(silent=True), settings)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice)
         job_id = new_job_id()
         job_request = JobRequest(job_id, tts_request.text, tts_request.voice, tts_request.speed)
         job_store.put(JobStatus(job_id, JobState.QUEUED))
