@@ -9,7 +9,7 @@ from flask import Flask, Response, jsonify, request
 
 from kokoro_stream.audio_io import encode_wav
 from kokoro_stream.config import Settings
-from kokoro_stream.engine.base import EngineError, SpeechEngine
+from kokoro_stream.engine.base import EngineError, SpeechEngine, warm_up
 from kokoro_stream.engine.factory import build_engine
 from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus, new_job_id
@@ -95,6 +95,8 @@ def create_app(
         settings.default_voice if settings.default_voice in voices_available else voices_available[0]
     )
     metrics = Metrics()
+    if settings.warmup:
+        metrics.warmup_seconds.set(warm_up(engine, default_voice))
     pool = PrefetchPool(settings.prefetch_workers)
     synthesizer = StreamingSynthesizer(
         engine, pool, settings, chunk_observer=metrics.chunk_latency.observe

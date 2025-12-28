@@ -47,6 +47,7 @@ class Settings:
     kafka_group: str = "tts-workers"
     output_dir: str = "output"
     job_output: str = "output/audio"
+    warmup: bool = True
     max_text_chars: int = 5000
     max_job_text_chars: int = 200000
 
@@ -74,6 +75,7 @@ class Settings:
             kafka_group=env.get("KAFKA_GROUP", defaults.kafka_group),
             output_dir=env.get("OUTPUT_DIR", defaults.output_dir),
             job_output=env.get("JOB_OUTPUT", defaults.job_output),
+            warmup=_read_int(env, "WARMUP", int(defaults.warmup)) != 0,
             max_text_chars=_read_int(env, "MAX_TEXT_CHARS", defaults.max_text_chars),
             max_job_text_chars=_read_int(env, "MAX_JOB_TEXT_CHARS", defaults.max_job_text_chars),
         )

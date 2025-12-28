@@ -26,6 +26,9 @@ class Metrics:
         self.active_streams = Gauge(
             "tts_active_streams", "Streams currently being served", registry=self.registry
         )
+        self.warmup_seconds = Gauge(
+            "tts_warmup_seconds", "Time spent warming up the engine at startup", registry=self.registry
+        )
         self.requests = Counter(
             "tts_requests_total", "Requests by endpoint and status", ["endpoint", "status"], registry=self.registry
         )

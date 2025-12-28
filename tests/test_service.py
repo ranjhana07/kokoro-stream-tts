@@ -135,3 +135,26 @@ def test_out_of_range_speed_is_rejected(client, speed):
     response = client.post("/v1/tts", json={"text": "hi", "speed": speed})
     assert response.status_code == 400
     assert "speed" in response.json["error"]
+
+
+class CountingEngine(SineEngine):
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+
+    def synthesize(self, text, voice, speed=1.0):
+        self.calls += 1
+        return super().synthesize(text, voice, speed)
+
+
+def test_engine_is_warmed_up_before_serving():
+    engine = CountingEngine()
+    app = create_app(Settings(warmup=True), engine)
+    assert engine.calls == 2
+    assert "tts_warmup_seconds" in app.test_client().get("/metrics").data.decode()
+
+
+def test_warmup_can_be_disabled():
+    engine = CountingEngine()
+    create_app(Settings(warmup=False), engine)
+    assert engine.calls == 0
