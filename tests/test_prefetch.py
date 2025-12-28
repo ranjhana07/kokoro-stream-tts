@@ -123,3 +123,52 @@ def test_streams_share_pool_without_mixing_results(pool):
         thread.join()
     for offset, values in outputs.items():
         assert values == [value * 2 for value in range(offset, offset + 15)]
+
+
+def test_head_priority_runs_before_queued_body_work():
+    pool = PrefetchPool(workers=1)
+    gate = threading.Event()
+    order = []
+    blocker = pool.submit(lambda: gate.wait(2))
+    time.sleep(0.05)
+    body = [pool.submit(order.append, f"body-{index}") for index in range(3)]
+    head = pool.submit(order.append, "head", priority=0)
+    gate.set()
+    for future in [blocker, head, *body]:
+        future.result(timeout=2)
+    pool.shutdown()
+    assert order == ["head", "body-0", "body-1", "body-2"]
+
+
+def test_new_stream_first_chunk_is_not_stuck_behind_older_streams():
+    pool = PrefetchPool(workers=1)
+    gate = threading.Event()
+    order = []
+
+    def work(label):
+        gate.wait(2)
+        order.append(label)
+        return label
+
+    old_stream = StreamPrefetcher(pool, ["old-0", "old-1", "old-2", "old-3"], work, depth=4)
+    time.sleep(0.05)
+    new_stream = StreamPrefetcher(pool, ["new-0", "new-1"], work, depth=2)
+    gate.set()
+    list(old_stream)
+    list(new_stream)
+    pool.shutdown()
+    assert order.index("new-0") < order.index("old-2")
+
+
+def test_shutdown_cancels_pending_and_rejects_new_work():
+    pool = PrefetchPool(workers=1)
+    gate = threading.Event()
+    running = pool.submit(lambda: gate.wait(2))
+    time.sleep(0.05)
+    pending = pool.submit(lambda: "never")
+    gate.set()
+    pool.shutdown()
+    assert running.done()
+    assert pending.cancelled() or pending.result(timeout=1) == "never"
+    with pytest.raises(RuntimeError):
+        pool.submit(lambda: 1)
