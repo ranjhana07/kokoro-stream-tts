@@ -27,6 +27,7 @@ MAX_SPEED = 2.0
 
 TIME_PATTERN = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(ms|s)?\s*$", re.IGNORECASE)
 WHITESPACE_PATTERN = re.compile(r"\s+")
+PARAGRAPH_PATTERN = re.compile(r"\n\s*\n")
 
 
 class SSMLError(ValueError):
@@ -177,7 +178,11 @@ def break_duration(element: ElementTree.Element) -> int:
 
 def parse_plain(text: str) -> list[Segment]:
     builder = SegmentBuilder()
-    builder.add_text(text, Context())
+    paragraphs = PARAGRAPH_PATTERN.split(text)
+    for index, paragraph in enumerate(paragraphs):
+        builder.add_text(paragraph, Context())
+        if index < len(paragraphs) - 1:
+            builder.add_pause(PARAGRAPH_PAUSE_MS)
     return builder.finish()
 
 

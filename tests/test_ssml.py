@@ -140,3 +140,18 @@ def test_malformed_markup():
 def test_text_is_normalized_around_elements():
     segments = parse_ssml("<speak>It is 3:30 pm <break time='1s'/> see you.</speak>")
     assert texts(segments) == ["It is three thirty p m", "see you."]
+
+
+def test_blank_lines_in_plain_text_become_paragraph_pauses():
+    segments = parse_ssml("First paragraph.\n\nSecond paragraph.\n   \nThird.")
+    assert segments == [
+        SpeechSegment("First paragraph."),
+        PauseSegment(600),
+        SpeechSegment("Second paragraph."),
+        PauseSegment(600),
+        SpeechSegment("Third."),
+    ]
+
+
+def test_single_newlines_stay_inside_one_segment():
+    assert parse_ssml("line one\nline two") == [SpeechSegment("line one line two")]
