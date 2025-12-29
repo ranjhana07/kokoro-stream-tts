@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Sequence
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, g, jsonify, request
 
 from kokoro_stream.audio_io import encode_wav
 from kokoro_stream.config import Settings
@@ -20,6 +22,8 @@ from kokoro_stream.streaming.pipeline import StreamingSynthesizer
 from kokoro_stream.streaming.prefetch import PrefetchPool
 from kokoro_stream.text.ssml import SSMLError
 
+
+logger = logging.getLogger(__name__)
 
 STREAM_MIMETYPE = "application/x-kokoro-frames"
 MIN_SPEED = 0.5
@@ -59,18 +63,25 @@ def parse_request(
     return TTSRequest(text=text, voice=voice, speed=speed)
 
 
-def instrument_stream(frames: Iterator[bytes], metrics: Metrics, started: float) -> Iterator[bytes]:
+def instrument_stream(
+    frames: Iterator[bytes], metrics: Metrics, started: float, request_id: str = ""
+) -> Iterator[bytes]:
     metrics.active_streams.inc()
     first_frame = True
+    frame_count = 0
     try:
         for frame in frames:
+            frame_count += 1
             if first_frame:
                 metrics.ttfa.observe(time.perf_counter() - started)
+                logger.info("stream %s first frame after %.0f ms", request_id, (time.perf_counter() - started) * 1000)
                 first_frame = False
             if frame[5] == FrameType.ERROR:
                 metrics.stream_errors.inc()
+                logger.warning("stream %s ended with an error frame", request_id)
             yield frame
     finally:
+        logger.info("stream %s closed after %d frames in %.2f s", request_id, frame_count, time.perf_counter() - started)
         metrics.active_streams.dec()
         close = getattr(frames, "close", None)
         if close:
@@ -105,8 +116,13 @@ def create_app(
     app.extensions["synthesizer"] = synthesizer
     app.extensions["metrics"] = metrics
 
+    @app.before_request
+    def assign_request_id():
+        g.request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+
     @app.after_request
     def count_request(response: Response):
+        response.headers["X-Request-ID"] = g.get("request_id", "")
         if request.endpoint and request.endpoint != "metrics":
             metrics.requests.labels(request.endpoint, str(response.status_code)).inc()
         return response
@@ -148,7 +164,7 @@ def create_app(
         tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars)
         chunks = synthesizer.prepare(tts_request.text)
         frames = synthesizer.frames(chunks, tts_request.voice, tts_request.speed)
-        response = Response(instrument_stream(frames, metrics, started), mimetype=STREAM_MIMETYPE)
+        response = Response(instrument_stream(frames, metrics, started, g.request_id), mimetype=STREAM_MIMETYPE)
         response.headers["X-Sample-Rate"] = str(engine.sample_rate)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Accel-Buffering"] = "no"

@@ -158,3 +158,10 @@ def test_warmup_can_be_disabled():
     engine = CountingEngine()
     create_app(Settings(warmup=False), engine)
     assert engine.calls == 0
+
+
+def test_request_id_is_echoed_or_generated(client):
+    echoed = client.get("/healthz", headers={"X-Request-ID": "abc-123"})
+    assert echoed.headers["X-Request-ID"] == "abc-123"
+    generated = client.get("/healthz")
+    assert len(generated.headers["X-Request-ID"]) == 12
