@@ -51,6 +51,21 @@ class Settings:
     max_text_chars: int = 5000
     max_job_text_chars: int = 200000
 
+    def validate(self) -> "Settings":
+        if self.engine not in ("sine", "kokoro"):
+            raise ValueError(f"KOKORO_ENGINE must be sine or kokoro, got {self.engine!r}")
+        if self.sample_rate <= 0:
+            raise ValueError("SAMPLE_RATE must be positive")
+        if self.prefetch_depth < 1 or self.prefetch_workers < 1:
+            raise ValueError("PREFETCH_DEPTH and PREFETCH_WORKERS must be at least 1")
+        if self.crossfade_ms < 0:
+            raise ValueError("CROSSFADE_MS cannot be negative")
+        if not 0 < self.first_chunk_chars <= self.max_chunk_chars:
+            raise ValueError("FIRST_CHUNK_CHARS must be positive and no larger than MAX_CHUNK_CHARS")
+        if self.intra_op_threads < 1:
+            raise ValueError("KOKORO_INTRA_OP_THREADS must be at least 1")
+        return self
+
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Settings":
         env = os.environ if environ is None else environ
@@ -78,4 +93,4 @@ class Settings:
             warmup=_read_int(env, "WARMUP", int(defaults.warmup)) != 0,
             max_text_chars=_read_int(env, "MAX_TEXT_CHARS", defaults.max_text_chars),
             max_job_text_chars=_read_int(env, "MAX_JOB_TEXT_CHARS", defaults.max_job_text_chars),
-        )
+        ).validate()
