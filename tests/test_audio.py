@@ -38,3 +38,37 @@ def test_quiet_noise_below_threshold_is_removed():
     padded = np.concatenate([noise, tone(2400), noise])
     trimmed = trim_silence(padded, RATE, threshold_db=-50.0, keep_ms=5)
     assert len(trimmed) < 2400 + 2 * int(RATE * 0.005) + 400
+
+
+from kokoro_stream.streaming.audio import resample
+
+
+def sine(frequency, rate, seconds=0.5):
+    return np.sin(2 * np.pi * frequency * np.arange(int(rate * seconds)) / rate).astype(np.float32)
+
+
+def test_resample_length_scales_with_rate():
+    assert len(resample(sine(440, 24000), 24000, 16000)) == 8000
+    assert len(resample(sine(440, 16000), 16000, 24000)) == 12000
+
+
+def test_resample_same_rate_is_identity():
+    original = sine(440, 24000)
+    assert resample(original, 24000, 24000) is original
+
+
+def test_resample_preserves_tone_frequency():
+    resampled = resample(sine(500, 24000), 24000, 16000)
+    spectrum = np.abs(np.fft.rfft(resampled))
+    peak_hz = np.argmax(spectrum) * 16000 / len(resampled)
+    assert peak_hz == pytest.approx(500, abs=5)
+
+
+def test_downsampling_removes_content_above_new_nyquist():
+    high = sine(9000, 24000)
+    resampled = resample(high, 24000, 8000)
+    assert np.sqrt(np.mean(resampled[200:-200] ** 2)) < 0.05 * np.sqrt(np.mean(high**2))
+
+
+def test_resample_empty():
+    assert resample(np.zeros(0, dtype=np.float32), 24000, 16000).size == 0
