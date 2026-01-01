@@ -7,6 +7,7 @@ import numpy as np
 
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import SpeechEngine
+from kokoro_stream.streaming.audio import trim_silence
 from kokoro_stream.streaming.crossfade import Crossfader
 from kokoro_stream.streaming.frames import encode_audio, encode_end, encode_error
 from kokoro_stream.streaming.prefetch import PrefetchPool, StreamPrefetcher
@@ -39,6 +40,8 @@ class StreamingSynthesizer:
         started = time.perf_counter()
         if chunk.text:
             audio = self.engine.synthesize(chunk.text, voice, speed * chunk.speed)
+            if self.settings.trim_silence:
+                audio = trim_silence(audio, self.engine.sample_rate)
         else:
             audio = np.zeros(0, dtype=np.float32)
         if chunk.pause_ms:
