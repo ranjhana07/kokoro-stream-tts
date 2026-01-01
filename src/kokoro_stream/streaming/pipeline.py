@@ -7,7 +7,7 @@ import numpy as np
 
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import SpeechEngine
-from kokoro_stream.streaming.audio import trim_silence
+from kokoro_stream.streaming.audio import resample, trim_silence
 from kokoro_stream.streaming.crossfade import Crossfader
 from kokoro_stream.streaming.frames import encode_audio, encode_end, encode_error
 from kokoro_stream.streaming.prefetch import PrefetchPool, StreamPrefetcher
@@ -36,7 +36,10 @@ class StreamingSynthesizer:
     def prepare(self, text: str) -> list[Chunk]:
         return plan_chunks(parse_ssml(text), self._budget)
 
-    def synthesize_chunk(self, chunk: Chunk, voice: str, speed: float) -> np.ndarray:
+    def synthesize_chunk(
+        self, chunk: Chunk, voice: str, speed: float, output_rate: int | None = None
+    ) -> np.ndarray:
+        output_rate = output_rate or self.engine.sample_rate
         started = time.perf_counter()
         if chunk.text:
             audio = self.engine.synthesize(chunk.text, voice, speed * chunk.speed)
@@ -44,19 +47,24 @@ class StreamingSynthesizer:
                 audio = trim_silence(audio, self.engine.sample_rate)
         else:
             audio = np.zeros(0, dtype=np.float32)
+        if audio.size and output_rate != self.engine.sample_rate:
+            audio = resample(audio, self.engine.sample_rate, output_rate)
         if chunk.pause_ms:
-            silence = np.zeros(int(self.engine.sample_rate * chunk.pause_ms / 1000), dtype=np.float32)
+            silence = np.zeros(int(output_rate * chunk.pause_ms / 1000), dtype=np.float32)
             audio = np.concatenate([audio, silence])
         if self._chunk_observer:
             self._chunk_observer(time.perf_counter() - started)
         return audio
 
-    def render(self, chunks: list[Chunk], voice: str, speed: float = 1.0) -> Iterator[np.ndarray]:
-        crossfader = Crossfader(self.engine.sample_rate, self.settings.crossfade_ms)
+    def render(
+        self, chunks: list[Chunk], voice: str, speed: float = 1.0, sample_rate: int | None = None
+    ) -> Iterator[np.ndarray]:
+        output_rate = sample_rate or self.engine.sample_rate
+        crossfader = Crossfader(output_rate, self.settings.crossfade_ms)
         prefetcher = StreamPrefetcher(
             self.pool,
             chunks,
-            lambda chunk: self.synthesize_chunk(chunk, voice, speed),
+            lambda chunk: self.synthesize_chunk(chunk, voice, speed, output_rate),
             depth=self.settings.prefetch_depth,
         )
         try:
@@ -70,19 +78,23 @@ class StreamingSynthesizer:
         finally:
             prefetcher.close()
 
-    def frames(self, chunks: list[Chunk], voice: str, speed: float = 1.0) -> Iterator[bytes]:
+    def frames(
+        self, chunks: list[Chunk], voice: str, speed: float = 1.0, sample_rate: int | None = None
+    ) -> Iterator[bytes]:
         sequence = 0
-        sample_rate = self.engine.sample_rate
+        sample_rate = sample_rate or self.engine.sample_rate
         try:
-            for audio in self.render(chunks, voice, speed):
+            for audio in self.render(chunks, voice, speed, sample_rate):
                 yield encode_audio(sequence, audio, sample_rate)
                 sequence += 1
             yield encode_end(sequence, sample_rate)
         except Exception as error:
             yield encode_error(sequence, f"{type(error).__name__}: {error}", sample_rate)
 
-    def synthesize(self, chunks: list[Chunk], voice: str, speed: float = 1.0) -> np.ndarray:
-        pieces = list(self.render(chunks, voice, speed))
+    def synthesize(
+        self, chunks: list[Chunk], voice: str, speed: float = 1.0, sample_rate: int | None = None
+    ) -> np.ndarray:
+        pieces = list(self.render(chunks, voice, speed, sample_rate))
         if not pieces:
             return np.zeros(0, dtype=np.float32)
         return np.concatenate(pieces)

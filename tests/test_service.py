@@ -165,3 +165,27 @@ def test_request_id_is_echoed_or_generated(client):
     assert echoed.headers["X-Request-ID"] == "abc-123"
     generated = client.get("/healthz")
     assert len(generated.headers["X-Request-ID"]) == 12
+
+
+def test_stream_can_be_resampled(client):
+    body = {"text": TEXT, "voice": "sine_mid", "sample_rate": 16000}
+    response = client.post("/v1/tts/stream", json=body)
+    assert response.headers["X-Sample-Rate"] == "16000"
+    frames = decode_all(response.data)
+    assert {frame.sample_rate for frame in frames} == {16000}
+    native = decode_all(client.post("/v1/tts/stream", json={**body, "sample_rate": 24000}).data)
+    resampled_samples = sum(frame.samples().size for frame in frames[:-1])
+    native_samples = sum(frame.samples().size for frame in native[:-1])
+    assert resampled_samples == pytest.approx(native_samples * 16000 / 24000, rel=0.02)
+
+
+def test_wav_uses_requested_sample_rate(client):
+    response = client.post("/v1/tts", json={"text": TEXT, "voice": "sine_mid", "sample_rate": 8000})
+    with wave.open(io.BytesIO(response.data)) as reader:
+        assert reader.getframerate() == 8000
+
+
+@pytest.mark.parametrize("rate", [100, 96000, "fast"])
+def test_bad_sample_rate_is_rejected(client, rate):
+    response = client.post("/v1/tts", json={"text": "hi", "sample_rate": rate})
+    assert response.status_code == 400

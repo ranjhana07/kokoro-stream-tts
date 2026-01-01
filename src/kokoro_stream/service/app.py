@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 STREAM_MIMETYPE = "application/x-kokoro-frames"
 MIN_SPEED = 0.5
 MAX_SPEED = 2.0
+MIN_SAMPLE_RATE = 8000
+MAX_SAMPLE_RATE = 48000
 
 
 class RequestError(ValueError):
@@ -39,10 +41,15 @@ class TTSRequest:
     text: str
     voice: str
     speed: float
+    sample_rate: int
 
 
 def parse_request(
-    payload: object, voices: Sequence[str], default_voice: str, max_text_chars: int
+    payload: object,
+    voices: Sequence[str],
+    default_voice: str,
+    max_text_chars: int,
+    native_rate: int,
 ) -> TTSRequest:
     if not isinstance(payload, dict):
         raise RequestError("request body must be a JSON object")
@@ -60,7 +67,13 @@ def parse_request(
         raise RequestError("speed must be a number") from error
     if not MIN_SPEED <= speed <= MAX_SPEED:
         raise RequestError(f"speed must be between {MIN_SPEED} and {MAX_SPEED}")
-    return TTSRequest(text=text, voice=voice, speed=speed)
+    try:
+        sample_rate = int(payload.get("sample_rate", native_rate))
+    except (TypeError, ValueError) as error:
+        raise RequestError("sample_rate must be an integer") from error
+    if not MIN_SAMPLE_RATE <= sample_rate <= MAX_SAMPLE_RATE:
+        raise RequestError(f"sample_rate must be between {MIN_SAMPLE_RATE} and {MAX_SAMPLE_RATE}")
+    return TTSRequest(text=text, voice=voice, speed=speed, sample_rate=sample_rate)
 
 
 def instrument_stream(
@@ -150,22 +163,26 @@ def create_app(
 
     @app.post("/v1/tts")
     def tts():
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars, engine.sample_rate)
         chunks = synthesizer.prepare(tts_request.text)
-        audio = synthesizer.synthesize(chunks, tts_request.voice, tts_request.speed)
-        body = encode_wav(audio, engine.sample_rate)
+        audio = synthesizer.synthesize(
+            chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate
+        )
+        body = encode_wav(audio, tts_request.sample_rate)
         response = Response(body, mimetype="audio/wav")
-        response.headers["X-Audio-Duration"] = f"{audio.size / engine.sample_rate:.3f}"
+        response.headers["X-Audio-Duration"] = f"{audio.size / tts_request.sample_rate:.3f}"
         return response
 
     @app.post("/v1/tts/stream")
     def tts_stream():
         started = time.perf_counter()
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars, engine.sample_rate)
         chunks = synthesizer.prepare(tts_request.text)
-        frames = synthesizer.frames(chunks, tts_request.voice, tts_request.speed)
+        frames = synthesizer.frames(
+            chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate
+        )
         response = Response(instrument_stream(frames, metrics, started, g.request_id), mimetype=STREAM_MIMETYPE)
-        response.headers["X-Sample-Rate"] = str(engine.sample_rate)
+        response.headers["X-Sample-Rate"] = str(tts_request.sample_rate)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Accel-Buffering"] = "no"
         return response
@@ -174,7 +191,7 @@ def create_app(
     def submit_job():
         if publisher is None:
             return jsonify(error="async jobs are not configured"), 503
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_job_text_chars)
+        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_job_text_chars, engine.sample_rate)
         job_id = new_job_id()
         job_request = JobRequest(job_id, tts_request.text, tts_request.voice, tts_request.speed)
         job_store.put(JobStatus(job_id, JobState.QUEUED))
