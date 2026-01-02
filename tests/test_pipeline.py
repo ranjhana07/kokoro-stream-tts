@@ -87,3 +87,26 @@ def test_speed_changes_duration(synthesizer):
     normal = synthesizer.synthesize(chunks, "sine_mid", speed=1.0)
     fast = synthesizer.synthesize(chunks, "sine_mid", speed=1.5)
     assert len(fast) < len(normal) * 0.8
+
+
+class PaddedEngine:
+    sample_rate = 24000
+
+    def voices(self):
+        return ["v"]
+
+    def synthesize(self, text, voice, speed=1.0):
+        body = np.full(12000, 0.3, dtype=np.float32)
+        silence = np.zeros(6000, dtype=np.float32)
+        return np.concatenate([silence, body, silence])
+
+
+def test_silence_trimming_shortens_chunks(pool, settings):
+    from dataclasses import replace
+
+    trimmed = StreamingSynthesizer(PaddedEngine(), pool, replace(settings, trim_silence=True))
+    untrimmed = StreamingSynthesizer(PaddedEngine(), pool, replace(settings, trim_silence=False))
+    chunks = trimmed.prepare("One sentence here. Another sentence there.")
+    short = len(trimmed.synthesize(chunks, "v"))
+    long = len(untrimmed.synthesize(chunks, "v"))
+    assert long - short >= 2 * 2 * (6000 - int(24000 * 0.012)) - 10

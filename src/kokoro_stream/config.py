@@ -41,6 +41,7 @@ class Settings:
     prefetch_depth: int = 3
     prefetch_workers: int = 4
     crossfade_ms: int = 60
+    trim_silence: bool = True
     kafka_bootstrap: str = ""
     kafka_request_topic: str = "tts.jobs.requests"
     kafka_status_topic: str = "tts.jobs.status"
@@ -84,6 +85,7 @@ class Settings:
             prefetch_depth=_read_int(env, "PREFETCH_DEPTH", defaults.prefetch_depth),
             prefetch_workers=_read_int(env, "PREFETCH_WORKERS", defaults.prefetch_workers),
             crossfade_ms=_read_int(env, "CROSSFADE_MS", defaults.crossfade_ms),
+            trim_silence=_read_int(env, "TRIM_SILENCE", int(defaults.trim_silence)) != 0,
             kafka_bootstrap=env.get("KAFKA_BOOTSTRAP", defaults.kafka_bootstrap),
             kafka_request_topic=env.get("KAFKA_REQUEST_TOPIC", defaults.kafka_request_topic),
             kafka_status_topic=env.get("KAFKA_STATUS_TOPIC", defaults.kafka_status_topic),

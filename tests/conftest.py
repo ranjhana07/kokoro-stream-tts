@@ -8,7 +8,7 @@ from kokoro_stream.streaming.prefetch import PrefetchPool
 
 @pytest.fixture
 def settings():
-    return Settings(first_chunk_chars=40, max_chunk_chars=120, prefetch_depth=3, crossfade_ms=60)
+    return Settings(first_chunk_chars=40, max_chunk_chars=120, prefetch_depth=3, crossfade_ms=60, trim_silence=False)
 
 
 @pytest.fixture
