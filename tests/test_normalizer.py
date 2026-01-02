@@ -86,3 +86,16 @@ def test_ordinals_dates_and_years(raw, expected):
 )
 def test_units(raw, expected):
     assert normalize_text(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("Version 2.0.1 is out", "Version two point zero point one is out"),
+        ("release 10.4.12.", "release ten point four point twelve."),
+        ("He ran 5k and 10K.", "He ran five thousand and ten thousand."),
+        ("pi is 3.14.", "pi is three point one four."),
+    ],
+)
+def test_versions_and_thousands(raw, expected):
+    assert normalize_text(raw) == expected

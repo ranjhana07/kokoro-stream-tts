@@ -96,6 +96,8 @@ UNIT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 RANGE_PATTERN = re.compile(r"(?<![\w.-])(\d+)\s?[-–]\s?(\d+)(?![\w-])")
+VERSION_PATTERN = re.compile(r"(?<![\w.])(\d+(?:\.\d+){2,})(?![\w.]\d|\w)")
+THOUSANDS_PATTERN = re.compile(r"(?<![\w.])(\d+)\s?[kK](?![\w])")
 
 
 def say_integer(text: str) -> str:
@@ -218,6 +220,14 @@ def expand_unit(match: re.Match[str]) -> str:
     return f"{amount} {singular if is_one else plural}"
 
 
+def expand_version(match: re.Match[str]) -> str:
+    return " point ".join(say_integer(part) for part in match.group(1).split("."))
+
+
+def expand_thousands(match: re.Match[str]) -> str:
+    return f"{say_integer(match.group(1))} thousand"
+
+
 def expand_range(match: re.Match[str]) -> str:
     start_text, end_text = match.groups()
     if start_text.startswith("0") or end_text.startswith("0"):
@@ -258,7 +268,9 @@ PASSES: tuple[Callable[[str], str], ...] = (
     lambda text: ORDINAL_PATTERN.sub(expand_ordinal, text),
     lambda text: DECADE_PATTERN.sub(expand_decade, text),
     lambda text: YEAR_PATTERN.sub(expand_year, text),
+    lambda text: VERSION_PATTERN.sub(expand_version, text),
     lambda text: UNIT_PATTERN.sub(expand_unit, text),
+    lambda text: THOUSANDS_PATTERN.sub(expand_thousands, text),
     lambda text: RANGE_PATTERN.sub(expand_range, text),
     lambda text: DECIMAL_PATTERN.sub(expand_decimal, text),
     lambda text: INTEGER_PATTERN.sub(expand_integer, text),
