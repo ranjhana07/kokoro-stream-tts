@@ -129,6 +129,11 @@ def create_app(
     app.extensions["synthesizer"] = synthesizer
     app.extensions["metrics"] = metrics
 
+    def read_request(max_chars: int) -> TTSRequest:
+        return parse_request(
+            request.get_json(silent=True), voices_available, default_voice, max_chars, engine.sample_rate
+        )
+
     @app.before_request
     def assign_request_id():
         g.request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
@@ -163,7 +168,7 @@ def create_app(
 
     @app.post("/v1/tts")
     def tts():
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars, engine.sample_rate)
+        tts_request = read_request(settings.max_text_chars)
         chunks = synthesizer.prepare(tts_request.text)
         audio = synthesizer.synthesize(
             chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate
@@ -176,7 +181,7 @@ def create_app(
     @app.post("/v1/tts/stream")
     def tts_stream():
         started = time.perf_counter()
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_text_chars, engine.sample_rate)
+        tts_request = read_request(settings.max_text_chars)
         chunks = synthesizer.prepare(tts_request.text)
         frames = synthesizer.frames(
             chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate
@@ -191,7 +196,7 @@ def create_app(
     def submit_job():
         if publisher is None:
             return jsonify(error="async jobs are not configured"), 503
-        tts_request = parse_request(request.get_json(silent=True), voices_available, default_voice, settings.max_job_text_chars, engine.sample_rate)
+        tts_request = read_request(settings.max_job_text_chars)
         job_id = new_job_id()
         job_request = JobRequest(job_id, tts_request.text, tts_request.voice, tts_request.speed)
         job_store.put(JobStatus(job_id, JobState.QUEUED))
