@@ -99,3 +99,21 @@ def test_units(raw, expected):
 )
 def test_versions_and_thousands(raw, expected):
     assert normalize_text(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("1/2 cup", "one half cup"),
+        ("3/4 mile", "three quarters mile"),
+        ("2/3 done", "two thirds done"),
+        ("1/8 inch", "one eighth inch"),
+        ("24/7 support", "twenty four seven support"),
+        ("a/b stays", "a/b stays"),
+        ("on 5/6/2024", "on May sixth twenty twenty four"),
+        ("Call (415) 555-0142.", "Call four one five, five five five, oh one four two."),
+        ("Call 1-800-555-0199 now", "Call one, eight oh oh, five five five, oh one nine nine now"),
+    ],
+)
+def test_fractions_dates_and_phone_numbers(raw, expected):
+    assert normalize_text(raw) == expected

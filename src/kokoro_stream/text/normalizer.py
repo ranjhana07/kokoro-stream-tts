@@ -96,7 +96,10 @@ UNIT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 RANGE_PATTERN = re.compile(r"(?<![\w.-])(\d+)\s?[-–]\s?(\d+)(?![\w-])")
-VERSION_PATTERN = re.compile(r"(?<![\w.])(\d+(?:\.\d+){2,})(?![\w.]\d|\w)")
+FRACTION_PATTERN = re.compile(r"(?<![\w./])(\d{1,2})/(\d{1,2})(?![\w/]|\.\d)")
+PHONE_PATTERN = re.compile(r"(?<![\w-])(\+?1[-. ])?\(?(\d{3})\)?[-. ](\d{3})[-. ](\d{4})(?![\w-])")
+SLASH_DATE_PATTERN = re.compile(r"(?<![\w/])(\d{1,2})/(\d{1,2})/(\d{4})(?![\w/])")
+VERSION_PATTERN =re.compile(r"(?<![\w.])(\d+(?:\.\d+){2,})(?![\w.]\d|\w)")
 THOUSANDS_PATTERN = re.compile(r"(?<![\w.])(\d+)\s?[kK](?![\w])")
 
 
@@ -220,6 +223,31 @@ def expand_unit(match: re.Match[str]) -> str:
     return f"{amount} {singular if is_one else plural}"
 
 
+def expand_fraction(match: re.Match[str]) -> str:
+    numerator, denominator = int(match.group(1)), int(match.group(2))
+    if not 0 < numerator < denominator <= 10 or denominator == 1:
+        return f"{say_integer(match.group(1))} {say_integer(match.group(2))}"
+    if denominator == 2:
+        return "one half" if numerator == 1 else f"{numbers.cardinal(numerator)} halves"
+    if denominator == 4:
+        return "one quarter" if numerator == 1 else f"{numbers.cardinal(numerator)} quarters"
+    name = numbers.ordinal(denominator)
+    return f"{numbers.cardinal(numerator)} {name}" if numerator == 1 else f"{numbers.cardinal(numerator)} {name}s"
+
+
+def expand_phone(match: re.Match[str]) -> str:
+    country, area, exchange, line = match.groups()
+    prefix = "one, " if country else ""
+    return f"{prefix}{numbers.digits(area)}, {numbers.digits(exchange)}, {numbers.digits(line)}"
+
+
+def expand_slash_date(match: re.Match[str]) -> str:
+    month, day, year_text = (int(group) for group in match.groups())
+    if not (1 <= month <= 12 and 1 <= day <= 31):
+        return match.group(0)
+    return f"{MONTHS[month - 1]} {numbers.ordinal(day)} {numbers.year(year_text)}"
+
+
 def expand_version(match: re.Match[str]) -> str:
     return " point ".join(say_integer(part) for part in match.group(1).split("."))
 
@@ -268,6 +296,9 @@ PASSES: tuple[Callable[[str], str], ...] = (
     lambda text: ORDINAL_PATTERN.sub(expand_ordinal, text),
     lambda text: DECADE_PATTERN.sub(expand_decade, text),
     lambda text: YEAR_PATTERN.sub(expand_year, text),
+    lambda text: SLASH_DATE_PATTERN.sub(expand_slash_date, text),
+    lambda text: PHONE_PATTERN.sub(expand_phone, text),
+    lambda text: FRACTION_PATTERN.sub(expand_fraction, text),
     lambda text: VERSION_PATTERN.sub(expand_version, text),
     lambda text: UNIT_PATTERN.sub(expand_unit, text),
     lambda text: THOUSANDS_PATTERN.sub(expand_thousands, text),
