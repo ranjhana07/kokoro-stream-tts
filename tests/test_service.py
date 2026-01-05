@@ -189,3 +189,19 @@ def test_wav_uses_requested_sample_rate(client):
 def test_bad_sample_rate_is_rejected(client, rate):
     response = client.post("/v1/tts", json={"text": "hi", "sample_rate": rate})
     assert response.status_code == 400
+
+
+def test_repeated_request_hits_the_chunk_cache(client):
+    body = {"text": TEXT, "voice": "sine_mid"}
+    client.post("/v1/tts", json=body)
+    client.post("/v1/tts", json=body)
+    metrics = client.get("/metrics").data.decode()
+    hits = float(next(line for line in metrics.splitlines() if line.startswith("tts_chunk_cache_hits ")).split()[1])
+    assert hits >= 2
+
+
+def test_cache_can_be_disabled():
+    settings = Settings(chunk_cache_mb=0, default_voice="sine_mid")
+    client = create_app(settings, SineEngine()).test_client()
+    client.post("/v1/tts", json={"text": "Hello there."})
+    assert "tts_chunk_cache_hits" not in client.get("/metrics").data.decode()

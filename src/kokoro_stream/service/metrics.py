@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from kokoro_stream.streaming.cache import ChunkCache
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, Gauge, Histogram, generate_latest
 
 TTFA_BUCKETS = (0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0)
@@ -34,6 +35,17 @@ class Metrics:
         )
         self.stream_errors = Counter(
             "tts_stream_errors_total", "Streams that ended with an error frame", registry=self.registry
+        )
+
+    def track_cache(self, cache: ChunkCache) -> None:
+        Gauge("tts_chunk_cache_hits", "Chunk cache hits", registry=self.registry).set_function(
+            lambda: cache.hits
+        )
+        Gauge("tts_chunk_cache_misses", "Chunk cache misses", registry=self.registry).set_function(
+            lambda: cache.misses
+        )
+        Gauge("tts_chunk_cache_bytes", "Bytes held by the chunk cache", registry=self.registry).set_function(
+            lambda: cache.size_bytes
         )
 
     def render(self) -> bytes:
