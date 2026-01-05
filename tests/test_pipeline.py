@@ -110,3 +110,43 @@ def test_silence_trimming_shortens_chunks(pool, settings):
     short = len(trimmed.synthesize(chunks, "v"))
     long = len(untrimmed.synthesize(chunks, "v"))
     assert long - short >= 2 * 2 * (6000 - int(24000 * 0.012)) - 10
+
+
+class CountingEngine:
+    sample_rate = 24000
+
+    def __init__(self):
+        self.calls = 0
+
+    def voices(self):
+        return ["v"]
+
+    def synthesize(self, text, voice, speed=1.0):
+        self.calls += 1
+        return np.full(6000, 0.2, dtype=np.float32)
+
+
+def test_cache_skips_repeated_chunks(pool, settings):
+    from kokoro_stream.streaming.cache import ChunkCache
+
+    engine = CountingEngine()
+    cache = ChunkCache(max_bytes=1_000_000)
+    synthesizer = StreamingSynthesizer(engine, pool, settings, cache=cache)
+    chunks = synthesizer.prepare("The same sentence again. And a second sentence.")
+    first = synthesizer.synthesize(chunks, "v")
+    calls_after_first = engine.calls
+    second = synthesizer.synthesize(chunks, "v")
+    assert engine.calls == calls_after_first
+    assert np.array_equal(first, second)
+    assert cache.hits == len(chunks)
+
+
+def test_cache_key_includes_voice_and_speed(pool, settings):
+    from kokoro_stream.streaming.cache import ChunkCache
+
+    engine = CountingEngine()
+    synthesizer = StreamingSynthesizer(engine, pool, settings, cache=ChunkCache(1_000_000))
+    chunks = synthesizer.prepare("Only one sentence here.")
+    synthesizer.synthesize(chunks, "v", speed=1.0)
+    synthesizer.synthesize(chunks, "v", speed=1.2)
+    assert engine.calls == 2

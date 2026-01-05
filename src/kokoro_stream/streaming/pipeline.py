@@ -8,6 +8,7 @@ import numpy as np
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import SpeechEngine
 from kokoro_stream.streaming.audio import resample, trim_silence
+from kokoro_stream.streaming.cache import ChunkCache
 from kokoro_stream.streaming.crossfade import Crossfader
 from kokoro_stream.streaming.frames import encode_audio, encode_end, encode_error
 from kokoro_stream.streaming.prefetch import PrefetchPool, StreamPrefetcher
@@ -24,11 +25,13 @@ class StreamingSynthesizer:
         pool: PrefetchPool,
         settings: Settings,
         chunk_observer: ChunkObserver | None = None,
+        cache: ChunkCache | None = None,
     ) -> None:
         self.engine = engine
         self.pool = pool
         self.settings = settings
         self._chunk_observer = chunk_observer
+        self._cache = cache
         self._budget = ChunkBudget(
             first_chars=settings.first_chunk_chars, max_chars=settings.max_chunk_chars
         )
@@ -36,19 +39,30 @@ class StreamingSynthesizer:
     def prepare(self, text: str) -> list[Chunk]:
         return plan_chunks(parse_ssml(text), self._budget)
 
+    def speech_audio(self, text: str, voice: str, speed: float, output_rate: int) -> np.ndarray:
+        key = (voice, round(speed, 3), text, output_rate, self.settings.trim_silence)
+        if self._cache is not None:
+            cached = self._cache.get(key)
+            if cached is not None:
+                return cached
+        audio = self.engine.synthesize(text, voice, speed)
+        if self.settings.trim_silence:
+            audio = trim_silence(audio, self.engine.sample_rate)
+        if audio.size and output_rate != self.engine.sample_rate:
+            audio = resample(audio, self.engine.sample_rate, output_rate)
+        if self._cache is not None:
+            self._cache.put(key, audio)
+        return audio
+
     def synthesize_chunk(
         self, chunk: Chunk, voice: str, speed: float, output_rate: int | None = None
     ) -> np.ndarray:
         output_rate = output_rate or self.engine.sample_rate
         started = time.perf_counter()
         if chunk.text:
-            audio = self.engine.synthesize(chunk.text, voice, speed * chunk.speed)
-            if self.settings.trim_silence:
-                audio = trim_silence(audio, self.engine.sample_rate)
+            audio = self.speech_audio(chunk.text, voice, speed * chunk.speed, output_rate)
         else:
             audio = np.zeros(0, dtype=np.float32)
-        if audio.size and output_rate != self.engine.sample_rate:
-            audio = resample(audio, self.engine.sample_rate, output_rate)
         if chunk.pause_ms:
             silence = np.zeros(int(output_rate * chunk.pause_ms / 1000), dtype=np.float32)
             audio = np.concatenate([audio, silence])

@@ -42,6 +42,7 @@ class Settings:
     prefetch_workers: int = 4
     crossfade_ms: int = 60
     trim_silence: bool = True
+    chunk_cache_mb: int = 32
     kafka_bootstrap: str = ""
     kafka_request_topic: str = "tts.jobs.requests"
     kafka_status_topic: str = "tts.jobs.status"
@@ -63,6 +64,8 @@ class Settings:
             raise ValueError("CROSSFADE_MS cannot be negative")
         if not 0 < self.first_chunk_chars <= self.max_chunk_chars:
             raise ValueError("FIRST_CHUNK_CHARS must be positive and no larger than MAX_CHUNK_CHARS")
+        if self.chunk_cache_mb < 0:
+            raise ValueError("CHUNK_CACHE_MB cannot be negative")
         if self.intra_op_threads < 1:
             raise ValueError("KOKORO_INTRA_OP_THREADS must be at least 1")
         return self
@@ -86,6 +89,7 @@ class Settings:
             prefetch_workers=_read_int(env, "PREFETCH_WORKERS", defaults.prefetch_workers),
             crossfade_ms=_read_int(env, "CROSSFADE_MS", defaults.crossfade_ms),
             trim_silence=_read_int(env, "TRIM_SILENCE", int(defaults.trim_silence)) != 0,
+            chunk_cache_mb=_read_int(env, "CHUNK_CACHE_MB", defaults.chunk_cache_mb),
             kafka_bootstrap=env.get("KAFKA_BOOTSTRAP", defaults.kafka_bootstrap),
             kafka_request_topic=env.get("KAFKA_REQUEST_TOPIC", defaults.kafka_request_topic),
             kafka_status_topic=env.get("KAFKA_STATUS_TOPIC", defaults.kafka_status_topic),
