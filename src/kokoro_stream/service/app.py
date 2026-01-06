@@ -16,6 +16,7 @@ from kokoro_stream.engine.factory import build_engine
 from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus, new_job_id
 from kokoro_stream.jobs.store import FileJobStore, JobStore
+from kokoro_stream.service.limits import ReleasingIterator, StreamLimiter
 from kokoro_stream.service.metrics import Metrics
 from kokoro_stream.streaming.cache import ChunkCache
 from kokoro_stream.streaming.frames import FrameType
@@ -120,6 +121,7 @@ def create_app(
         settings.default_voice if settings.default_voice in voices_available else voices_available[0]
     )
     metrics = Metrics()
+    limiter = StreamLimiter(settings.max_streams)
     if settings.warmup:
         metrics.warmup_seconds.set(warm_up(engine, default_voice))
     pool = PrefetchPool(settings.prefetch_workers)
@@ -187,10 +189,19 @@ def create_app(
         started = time.perf_counter()
         tts_request = read_request(settings.max_text_chars)
         chunks = synthesizer.prepare(tts_request.text)
+        if not limiter.try_acquire():
+            metrics.rejected_streams.inc()
+            response = jsonify(error="too many concurrent streams")
+            response.status_code = 429
+            response.headers["Retry-After"] = "1"
+            return response
         frames = synthesizer.frames(
             chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate
         )
-        response = Response(instrument_stream(frames, metrics, started, g.request_id), mimetype=STREAM_MIMETYPE)
+        body = ReleasingIterator(
+            instrument_stream(frames, metrics, started, g.request_id), limiter.release
+        )
+        response = Response(body, mimetype=STREAM_MIMETYPE)
         response.headers["X-Sample-Rate"] = str(tts_request.sample_rate)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Accel-Buffering"] = "no"

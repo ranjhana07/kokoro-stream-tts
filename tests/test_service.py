@@ -205,3 +205,17 @@ def test_cache_can_be_disabled():
     client = create_app(settings, SineEngine()).test_client()
     client.post("/v1/tts", json={"text": "Hello there."})
     assert "tts_chunk_cache_hits" not in client.get("/metrics").data.decode()
+
+
+def test_streams_beyond_the_limit_get_429():
+    settings = Settings(max_streams=1, default_voice="sine_mid")
+    app = create_app(settings, SineEngine())
+    client = app.test_client()
+    first = client.post("/v1/tts/stream", json={"text": TEXT}, buffered=False)
+    second = client.post("/v1/tts/stream", json={"text": TEXT})
+    assert second.status_code == 429
+    assert second.headers["Retry-After"] == "1"
+    first.close()
+    third = client.post("/v1/tts/stream", json={"text": TEXT})
+    assert third.status_code == 200
+    assert "tts_rejected_streams_total 1.0" in client.get("/metrics").data.decode()

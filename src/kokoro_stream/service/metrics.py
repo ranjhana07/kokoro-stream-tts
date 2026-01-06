@@ -33,6 +33,9 @@ class Metrics:
         self.requests = Counter(
             "tts_requests_total", "Requests by endpoint and status", ["endpoint", "status"], registry=self.registry
         )
+        self.rejected_streams = Counter(
+            "tts_rejected_streams_total", "Streams refused because the service was full", registry=self.registry
+        )
         self.stream_errors = Counter(
             "tts_stream_errors_total", "Streams that ended with an error frame", registry=self.registry
         )
