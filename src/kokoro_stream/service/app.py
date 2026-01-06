@@ -17,6 +17,7 @@ from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus, new_job_id
 from kokoro_stream.jobs.store import FileJobStore, JobStore
 from kokoro_stream.service.metrics import Metrics
+from kokoro_stream.streaming.cache import ChunkCache
 from kokoro_stream.streaming.frames import FrameType
 from kokoro_stream.streaming.pipeline import StreamingSynthesizer
 from kokoro_stream.streaming.prefetch import PrefetchPool
@@ -122,8 +123,11 @@ def create_app(
     if settings.warmup:
         metrics.warmup_seconds.set(warm_up(engine, default_voice))
     pool = PrefetchPool(settings.prefetch_workers)
+    cache = ChunkCache(settings.chunk_cache_mb * 1024 * 1024) if settings.chunk_cache_mb else None
+    if cache is not None:
+        metrics.track_cache(cache)
     synthesizer = StreamingSynthesizer(
-        engine, pool, settings, chunk_observer=metrics.chunk_latency.observe
+        engine, pool, settings, chunk_observer=metrics.chunk_latency.observe, cache=cache
     )
     app = Flask(__name__)
     app.extensions["synthesizer"] = synthesizer
