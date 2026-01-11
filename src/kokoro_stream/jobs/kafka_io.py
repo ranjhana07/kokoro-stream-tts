@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Protocol
 
@@ -13,6 +14,8 @@ class JobPublisher(Protocol):
 
     def publish_status(self, status: JobStatus) -> None: ...
 
+    def dead_letter(self, request: JobRequest, reason: str) -> None: ...
+
 
 class KafkaJobPublisher:
     def __init__(
@@ -21,6 +24,7 @@ class KafkaJobPublisher:
         request_topic: str,
         status_topic: str,
         producer: Any | None = None,
+        dead_letter_topic: str = "tts.jobs.dead",
     ) -> None:
         if producer is None:
             from confluent_kafka import Producer
@@ -35,6 +39,7 @@ class KafkaJobPublisher:
             )
         self.request_topic = request_topic
         self.status_topic = status_topic
+        self.dead_letter_topic = dead_letter_topic
         self._producer = producer
 
     def submit(self, request: JobRequest) -> None:
@@ -42,6 +47,11 @@ class KafkaJobPublisher:
 
     def publish_status(self, status: JobStatus) -> None:
         self._produce(self.status_topic, status.job_id, status.to_json())
+
+    def dead_letter(self, request: JobRequest, reason: str) -> None:
+        payload = json.loads(request.to_json())
+        payload["failure"] = reason
+        self._produce(self.dead_letter_topic, request.job_id, json.dumps(payload).encode("utf-8"))
 
     def flush(self, timeout: float = 10.0) -> int:
         return self._producer.flush(timeout)

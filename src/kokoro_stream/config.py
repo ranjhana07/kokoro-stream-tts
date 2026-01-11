@@ -46,7 +46,9 @@ class Settings:
     kafka_bootstrap: str = ""
     kafka_request_topic: str = "tts.jobs.requests"
     kafka_status_topic: str = "tts.jobs.status"
+    kafka_dead_letter_topic: str = "tts.jobs.dead"
     kafka_group: str = "tts-workers"
+    job_max_attempts: int = 3
     output_dir: str = "output"
     job_output: str = "output/audio"
     api_keys: tuple[str, ...] = ()
@@ -95,7 +97,9 @@ class Settings:
             kafka_bootstrap=env.get("KAFKA_BOOTSTRAP", defaults.kafka_bootstrap),
             kafka_request_topic=env.get("KAFKA_REQUEST_TOPIC", defaults.kafka_request_topic),
             kafka_status_topic=env.get("KAFKA_STATUS_TOPIC", defaults.kafka_status_topic),
+            kafka_dead_letter_topic=env.get("KAFKA_DEAD_LETTER_TOPIC", defaults.kafka_dead_letter_topic),
             kafka_group=env.get("KAFKA_GROUP", defaults.kafka_group),
+            job_max_attempts=_read_int(env, "JOB_MAX_ATTEMPTS", defaults.job_max_attempts),
             output_dir=env.get("OUTPUT_DIR", defaults.output_dir),
             job_output=env.get("JOB_OUTPUT", defaults.job_output),
             max_streams=_read_int(env, "MAX_STREAMS", defaults.max_streams),

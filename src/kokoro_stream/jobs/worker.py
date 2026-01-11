@@ -4,11 +4,13 @@ import json
 import logging
 import signal
 import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from kokoro_stream.audio_io import WavFileWriter
 from kokoro_stream.config import Settings
+from kokoro_stream.engine.base import EngineError
 from kokoro_stream.engine.factory import build_engine
 from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher, build_consumer
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus
@@ -16,8 +18,11 @@ from kokoro_stream.jobs.sinks import OutputSink, sink_for
 from kokoro_stream.jobs.store import FileJobStore, JobStore
 from kokoro_stream.streaming.pipeline import StreamingSynthesizer
 from kokoro_stream.streaming.prefetch import PrefetchPool
+from kokoro_stream.text.ssml import SSMLError
 
 logger = logging.getLogger(__name__)
+
+PERMANENT_ERRORS = (ValueError, EngineError, SSMLError)
 
 
 class JobWorker:
@@ -28,7 +33,9 @@ class JobWorker:
         sink: OutputSink,
         publisher: JobPublisher,
         work_dir: Path,
+        max_attempts: int = 3,
     ) -> None:
+        self.max_attempts = max_attempts
         self.synthesizer = synthesizer
         self.store = store
         self.sink = sink
@@ -65,9 +72,27 @@ class JobWorker:
         except Exception as error:
             temporary.unlink(missing_ok=True)
             logger.exception("job %s failed", request.job_id)
+            return self._handle_failure(request, error)
+
+    def _handle_failure(self, request: JobRequest, error: Exception) -> JobStatus:
+        detail = f"{type(error).__name__}: {error}"
+        transient = not isinstance(error, PERMANENT_ERRORS)
+        next_attempt = request.attempts + 1
+        if transient and next_attempt < self.max_attempts:
+            self.publisher.submit(replace(request, attempts=next_attempt))
             return self._report(
-                JobStatus(request.job_id, JobState.FAILED, detail=f"{type(error).__name__}: {error}")
+                JobStatus(
+                    request.job_id,
+                    JobState.QUEUED,
+                    detail=f"retry {next_attempt} of {self.max_attempts - 1} after {detail}",
+                )
             )
+        if transient:
+            try:
+                self.publisher.dead_letter(request, detail)
+            except Exception:
+                logger.exception("could not dead-letter %s", request.job_id)
+        return self._report(JobStatus(request.job_id, JobState.FAILED, detail=detail))
 
     def handle_message(self, raw: bytes) -> JobStatus | None:
         try:
@@ -104,9 +129,13 @@ def main() -> int:
         store=FileJobStore(output / "status"),
         sink=sink_for(settings.job_output),
         publisher=KafkaJobPublisher(
-            settings.kafka_bootstrap, settings.kafka_request_topic, settings.kafka_status_topic
+            settings.kafka_bootstrap,
+            settings.kafka_request_topic,
+            settings.kafka_status_topic,
+            dead_letter_topic=settings.kafka_dead_letter_topic,
         ),
         work_dir=output / "tmp",
+        max_attempts=settings.job_max_attempts,
     )
     consumer = build_consumer(settings.kafka_bootstrap, settings.kafka_group, settings.kafka_request_topic)
     stop = threading.Event()
