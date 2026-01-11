@@ -122,3 +122,15 @@ def test_run_consumes_commits_and_closes(worker):
     assert consumer.closed
     assert len(consumer.committed) == 2
     assert worker.store.get(good.job_id).state is JobState.DONE
+
+
+def test_redelivered_finished_job_is_not_synthesized_again(worker, tmp_path):
+    request = JobRequest(new_job_id(), LONG_TEXT, "sine_mid")
+    first = worker.process(request)
+    output = tmp_path / "audio" / f"{request.job_id}.wav"
+    output.write_bytes(b"marker")
+    published_before = len(worker.publisher.statuses)
+    second = worker.process(request)
+    assert second == first
+    assert output.read_bytes() == b"marker"
+    assert len(worker.publisher.statuses) == published_before

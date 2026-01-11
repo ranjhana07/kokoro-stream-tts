@@ -45,6 +45,10 @@ class JobWorker:
         return status
 
     def process(self, request: JobRequest) -> JobStatus:
+        existing = self.store.get(request.job_id)
+        if existing is not None and existing.state is JobState.DONE:
+            logger.info("job %s already done, skipping redelivery", request.job_id)
+            return existing
         self._report(JobStatus(request.job_id, JobState.RUNNING))
         temporary = self.work_dir / f"{request.job_id}.wav"
         try:
