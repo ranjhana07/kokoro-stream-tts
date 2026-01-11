@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import threading
 from dataclasses import asdict, dataclass
@@ -82,6 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--streams", type=int, default=25)
     parser.add_argument("--voice")
     parser.add_argument("--speed", type=float, default=1.0)
+    parser.add_argument("--api-key", default=os.environ.get("KOKORO_API_KEY"))
     parser.add_argument("--text")
     parser.add_argument("--file", type=Path)
     parser.add_argument("--json", type=Path, help="write the summary to this file")
@@ -95,7 +97,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         text = args.text or DEFAULT_TEXT
     samples = run_streams(
-        lambda: stream_speech(args.url, text, args.voice, args.speed), args.streams
+        lambda: stream_speech(args.url, text, args.voice, args.speed, api_key=args.api_key),
+        args.streams,
     )
     summary = summarize(samples)
     print(f"streams      {summary['streams']}  errors {summary['errors']}")

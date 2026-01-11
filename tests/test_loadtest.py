@@ -88,3 +88,20 @@ def test_concurrent_streams_against_live_server(live_server):
     samples = run_streams(lambda: stream_speech(live_server, text, "sine_mid"), 6)
     assert all(sample.error is None for sample in samples)
     assert summarize(samples)["errors"] == 0
+
+
+def test_client_sends_api_key():
+    settings = Settings(api_keys=("k-123",), default_voice="sine_mid")
+    app = create_app(settings, SineEngine(sample_rate=settings.sample_rate))
+    server = make_server("127.0.0.1", 0, app, threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with pytest.raises(Exception, match="401"):
+            stream_speech(url, "Hello there.", "sine_mid")
+        result = stream_speech(url, "Hello there.", "sine_mid", api_key="k-123")
+        assert result.frame_count >= 1
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)

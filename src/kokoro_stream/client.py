@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -48,16 +49,21 @@ def stream_speech(
     timeout: float = 60.0,
     on_audio: AudioCallback | None = None,
     session: requests.Session | None = None,
+    api_key: str | None = None,
+    sample_rate: int | None = None,
 ) -> StreamResult:
     payload: dict[str, object] = {"text": text, "speed": speed}
     if voice:
         payload["voice"] = voice
+    if sample_rate:
+        payload["sample_rate"] = sample_rate
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     http = session or requests
     result = StreamResult()
     decoder = FrameDecoder()
     started = time.perf_counter()
     with http.post(
-        f"{base_url.rstrip('/')}/v1/tts/stream", json=payload, stream=True, timeout=timeout
+        f"{base_url.rstrip('/')}/v1/tts/stream", json=payload, headers=headers, stream=True, timeout=timeout
     ) as response:
         if response.status_code != 200:
             raise StreamError(f"HTTP {response.status_code}: {response.text[:200]}")
@@ -89,6 +95,8 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--file", type=Path)
     parser.add_argument("--voice")
     parser.add_argument("--speed", type=float, default=1.0)
+    parser.add_argument("--sample-rate", type=int)
+    parser.add_argument("--api-key", default=os.environ.get("KOKORO_API_KEY"))
     parser.add_argument("--out", type=Path, help="write the stream to a WAV file")
     return parser
 
@@ -106,7 +114,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             writer.write_float(samples)
 
     try:
-        result = stream_speech(args.url, text, args.voice, args.speed, on_audio=handle_audio)
+        result = stream_speech(
+            args.url,
+            text,
+            args.voice,
+            args.speed,
+            on_audio=handle_audio,
+            api_key=args.api_key,
+            sample_rate=args.sample_rate,
+        )
     except (StreamError, requests.RequestException) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
