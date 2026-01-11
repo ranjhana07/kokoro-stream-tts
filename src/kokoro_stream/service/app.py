@@ -16,6 +16,7 @@ from kokoro_stream.engine.factory import build_engine
 from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus, new_job_id
 from kokoro_stream.jobs.store import FileJobStore, JobStore
+from kokoro_stream.service.auth import OPEN_ENDPOINTS, extract_token, is_authorized
 from kokoro_stream.service.limits import ReleasingIterator, StreamLimiter
 from kokoro_stream.service.metrics import Metrics
 from kokoro_stream.streaming.cache import ChunkCache
@@ -139,6 +140,17 @@ def create_app(
         return parse_request(
             request.get_json(silent=True), voices_available, default_voice, max_chars, engine.sample_rate
         )
+
+    @app.before_request
+    def require_api_key():
+        if not settings.api_keys or request.endpoint in OPEN_ENDPOINTS:
+            return None
+        if not is_authorized(extract_token(request.headers), settings.api_keys):
+            response = jsonify(error="missing or invalid API key")
+            response.status_code = 401
+            response.headers["WWW-Authenticate"] = "Bearer"
+            return response
+        return None
 
     @app.before_request
     def assign_request_id():
