@@ -32,6 +32,7 @@ class JobRequest:
     voice: str
     speed: float = 1.0
     created_at: float = field(default_factory=time.time)
+    attempts: int = 0
 
     def to_json(self) -> bytes:
         return json.dumps(asdict(self)).encode("utf-8")
@@ -48,6 +49,7 @@ class JobRequest:
             voice=str(data["voice"]),
             speed=float(data.get("speed", 1.0)),
             created_at=float(data.get("created_at", time.time())),
+            attempts=int(data.get("attempts", 0)),
         )
 
 

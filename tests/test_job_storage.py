@@ -116,3 +116,12 @@ def test_kafka_publisher_uses_job_id_as_key():
     assert [message[0] for message in producer.messages] == ["requests", "status"]
     assert all(message[1] == request.job_id.encode() for message in producer.messages)
     assert JobRequest.from_json(producer.messages[0][2]) == request
+
+
+def test_request_attempts_default_and_round_trip():
+    request = JobRequest(new_job_id(), "Hi.", "v")
+    assert request.attempts == 0
+    retried = JobRequest(request.job_id, request.text, request.voice, attempts=2)
+    assert JobRequest.from_json(retried.to_json()).attempts == 2
+    legacy = json.dumps({"job_id": request.job_id, "text": "Hi.", "voice": "v"})
+    assert JobRequest.from_json(legacy).attempts == 0
