@@ -49,6 +49,7 @@ class Settings:
     kafka_dead_letter_topic: str = "tts.jobs.dead"
     kafka_group: str = "tts-workers"
     job_max_attempts: int = 3
+    worker_metrics_port: int = 9100
     output_dir: str = "output"
     job_output: str = "output/audio"
     api_keys: tuple[str, ...] = ()
@@ -100,6 +101,7 @@ class Settings:
             kafka_dead_letter_topic=env.get("KAFKA_DEAD_LETTER_TOPIC", defaults.kafka_dead_letter_topic),
             kafka_group=env.get("KAFKA_GROUP", defaults.kafka_group),
             job_max_attempts=_read_int(env, "JOB_MAX_ATTEMPTS", defaults.job_max_attempts),
+            worker_metrics_port=_read_int(env, "WORKER_METRICS_PORT", defaults.worker_metrics_port),
             output_dir=env.get("OUTPUT_DIR", defaults.output_dir),
             job_output=env.get("JOB_OUTPUT", defaults.job_output),
             max_streams=_read_int(env, "MAX_STREAMS", defaults.max_streams),

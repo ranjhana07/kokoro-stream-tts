@@ -122,3 +122,29 @@ def test_kafka_dead_letter_carries_failure_reason():
     payload = json.loads(value)
     assert payload["failure"] == "ConnectionError: gone"
     assert payload["attempts"] == 2
+
+
+def test_worker_metrics_count_outcomes(tmp_path, pool, settings):
+    from kokoro_stream.jobs.metrics import JobMetrics
+    from prometheus_client import generate_latest
+
+    metrics = JobMetrics()
+    engine = FlakyEngine(failures=1)
+    publisher = RecordingPublisher()
+    worker = JobWorker(
+        StreamingSynthesizer(engine, pool, settings),
+        FileJobStore(tmp_path / "status"),
+        LocalSink(tmp_path / "audio"),
+        publisher,
+        tmp_path / "tmp",
+        metrics=metrics,
+    )
+    request = JobRequest(new_job_id(), "Hello there.", "v")
+    worker.process(request)
+    worker.process(publisher.requests[0])
+    worker.process(JobRequest(new_job_id(), "  ", "v"))
+    text = generate_latest(metrics.registry).decode()
+    assert 'tts_jobs_finished_total{state="done"} 1.0' in text
+    assert 'tts_jobs_finished_total{state="failed"} 1.0' in text
+    assert "tts_jobs_retried_total 1.0" in text
+    assert "tts_job_audio_seconds_total" in text

@@ -4,15 +4,18 @@ import json
 import logging
 import signal
 import threading
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from kokoro_stream.audio_io import WavFileWriter
 from kokoro_stream.config import Settings
-from kokoro_stream.engine.base import EngineError
+from kokoro_stream.engine.base import EngineError, warm_up
 from kokoro_stream.engine.factory import build_engine
+from kokoro_stream.logging_setup import configure_logging
 from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher, build_consumer
+from kokoro_stream.jobs.metrics import JobMetrics
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus
 from kokoro_stream.jobs.sinks import OutputSink, sink_for
 from kokoro_stream.jobs.store import FileJobStore, JobStore
@@ -34,8 +37,10 @@ class JobWorker:
         publisher: JobPublisher,
         work_dir: Path,
         max_attempts: int = 3,
+        metrics: JobMetrics | None = None,
     ) -> None:
         self.max_attempts = max_attempts
+        self.metrics = metrics or JobMetrics()
         self.synthesizer = synthesizer
         self.store = store
         self.sink = sink
@@ -45,6 +50,13 @@ class JobWorker:
 
     def _report(self, status: JobStatus) -> JobStatus:
         self.store.put(status)
+        if status.state is JobState.DONE:
+            self.metrics.finished.labels("done").inc()
+            self.metrics.audio_seconds.inc(status.duration)
+        elif status.state is JobState.FAILED:
+            self.metrics.finished.labels("failed").inc()
+        elif status.state is JobState.QUEUED:
+            self.metrics.retried.inc()
         try:
             self.publisher.publish_status(status)
         except Exception:
@@ -57,6 +69,7 @@ class JobWorker:
             logger.info("job %s already done, skipping redelivery", request.job_id)
             return existing
         self._report(JobStatus(request.job_id, JobState.RUNNING))
+        started = time.perf_counter()
         temporary = self.work_dir / f"{request.job_id}.wav"
         try:
             chunks = self.synthesizer.prepare(request.text)
@@ -66,6 +79,7 @@ class JobWorker:
                 for audio in self.synthesizer.render(chunks, request.voice, request.speed):
                     writer.write_float(audio)
             location = self.sink.publish(temporary, f"{request.job_id}.wav")
+            self.metrics.duration.observe(time.perf_counter() - started)
             return self._report(
                 JobStatus(request.job_id, JobState.DONE, output=location, duration=writer.duration)
             )
@@ -118,9 +132,16 @@ class JobWorker:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_logging()
     settings = Settings.from_env()
     engine = build_engine(settings)
+    if settings.warmup:
+        voices = engine.voices()
+        voice = settings.default_voice if settings.default_voice in voices else voices[0]
+        logger.info("engine warm-up took %.2f s", warm_up(engine, voice))
+    metrics = JobMetrics()
+    if settings.worker_metrics_port:
+        metrics.serve(settings.worker_metrics_port)
     pool = PrefetchPool(settings.prefetch_workers)
     synthesizer = StreamingSynthesizer(engine, pool, settings)
     output = Path(settings.output_dir)
@@ -136,6 +157,7 @@ def main() -> int:
         ),
         work_dir=output / "tmp",
         max_attempts=settings.job_max_attempts,
+        metrics=metrics,
     )
     consumer = build_consumer(settings.kafka_bootstrap, settings.kafka_group, settings.kafka_request_topic)
     stop = threading.Event()
