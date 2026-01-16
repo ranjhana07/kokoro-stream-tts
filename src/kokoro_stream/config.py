@@ -32,6 +32,7 @@ class Settings:
     model_path: str = "models/kokoro-v1.0.onnx"
     voices_path: str = "models/voices-v1.0.bin"
     vocab_path: str = "models/config.json"
+    phonemizer: str = "auto"
     providers: tuple[str, ...] = ("CPUExecutionProvider",)
     intra_op_threads: int = 2
     sample_rate: int = 24000
@@ -61,6 +62,8 @@ class Settings:
     def validate(self) -> "Settings":
         if self.engine not in ("sine", "kokoro"):
             raise ValueError(f"KOKORO_ENGINE must be sine or kokoro, got {self.engine!r}")
+        if self.phonemizer not in ("auto", "misaki", "espeak"):
+            raise ValueError("KOKORO_PHONEMIZER must be auto, misaki or espeak")
         if self.sample_rate <= 0:
             raise ValueError("SAMPLE_RATE must be positive")
         if self.prefetch_depth < 1 or self.prefetch_workers < 1:
@@ -84,6 +87,7 @@ class Settings:
             model_path=env.get("KOKORO_MODEL_PATH", defaults.model_path),
             voices_path=env.get("KOKORO_VOICES_PATH", defaults.voices_path),
             vocab_path=env.get("KOKORO_VOCAB_PATH", defaults.vocab_path),
+            phonemizer=env.get("KOKORO_PHONEMIZER", defaults.phonemizer),
             providers=_read_list(env, "KOKORO_PROVIDERS", defaults.providers),
             intra_op_threads=_read_int(env, "KOKORO_INTRA_OP_THREADS", defaults.intra_op_threads),
             sample_rate=_read_int(env, "SAMPLE_RATE", defaults.sample_rate),

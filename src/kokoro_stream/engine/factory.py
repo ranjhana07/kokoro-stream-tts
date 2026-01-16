@@ -18,5 +18,6 @@ def build_engine(settings: Settings) -> SpeechEngine:
             vocab_path=settings.vocab_path,
             providers=settings.providers,
             intra_op_threads=settings.intra_op_threads,
+            phonemizer_preference=settings.phonemizer,
         )
     raise EngineError(f"unknown engine: {settings.engine}")

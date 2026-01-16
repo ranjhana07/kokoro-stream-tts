@@ -47,3 +47,9 @@ def test_invalid_values_are_rejected(environ):
 def test_non_numeric_value_raises():
     with pytest.raises(ValueError):
         Settings.from_env({"PREFETCH_DEPTH": "many"})
+
+
+def test_phonemizer_choice_is_validated():
+    assert Settings.from_env({"KOKORO_PHONEMIZER": "espeak"}).phonemizer == "espeak"
+    with pytest.raises(ValueError):
+        Settings.from_env({"KOKORO_PHONEMIZER": "festival"})
