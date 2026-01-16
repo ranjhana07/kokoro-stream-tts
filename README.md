@@ -113,6 +113,7 @@ Everything is read from environment variables. `.env.example` lists them all.
 | `KOKORO_MODEL_PATH` | `models/kokoro-v1.0.onnx` | ONNX model |
 | `KOKORO_VOICES_PATH` | `models/voices-v1.0.bin` | voices archive |
 | `KOKORO_VOCAB_PATH` | `models/config.json` | file with the phoneme vocabulary |
+| `KOKORO_PHONEMIZER` | `auto` | `misaki`, `espeak` or `auto` (misaki first, espeak as fallback) |
 | `KOKORO_PROVIDERS` | `CPUExecutionProvider` | comma separated ONNX Runtime providers |
 | `KOKORO_INTRA_OP_THREADS` | `2` | ONNX Runtime intra-op threads per session |
 | `FIRST_CHUNK_CHARS` | `60` | character budget for the first chunk |
@@ -120,8 +121,15 @@ Everything is read from environment variables. `.env.example` lists them all.
 | `PREFETCH_DEPTH` | `3` | chunks synthesized ahead per stream |
 | `PREFETCH_WORKERS` | `4` | threads in the shared synthesis pool |
 | `CROSSFADE_MS` | `60` | crossfade length between chunks |
+| `TRIM_SILENCE` | `1` | trim leading and trailing silence from each synthesized chunk |
+| `CHUNK_CACHE_MB` | `32` | LRU cache of synthesized chunks, `0` disables it |
+| `MAX_STREAMS` | `64` | concurrent streams before the service answers `429`, `0` for no limit |
+| `API_KEYS` | empty | comma separated keys; when set, requests need `Authorization: Bearer <key>` or `X-API-Key` |
+| `WARMUP` | `1` | run two short syntheses before accepting traffic |
 | `MAX_TEXT_CHARS` | `5000` | request size limit for streaming and WAV endpoints |
 | `KAFKA_BOOTSTRAP` | empty | broker address, jobs are disabled when empty |
+| `JOB_MAX_ATTEMPTS` | `3` | delivery attempts before a job is failed and dead-lettered |
+| `WORKER_METRICS_PORT` | `9100` | Prometheus port of the worker, `0` disables it |
 | `JOB_OUTPUT` | `output/audio` | directory or `s3://bucket/prefix` for finished jobs |
 | `WEB_THREADS` | `32` | Gunicorn threads per worker |
 
@@ -169,6 +177,10 @@ Other endpoints:
 | `GET /metrics` | Prometheus metrics: `tts_time_to_first_audio_seconds`, `tts_active_streams`, `tts_chunk_synthesis_seconds` |
 | `POST /v1/jobs` | queue a long-form job, returns `202` with a job id |
 | `GET /v1/jobs/<id>` | job state: `queued`, `running`, `done`, `failed` |
+
+Request fields for `/v1/tts` and `/v1/tts/stream`: `text` (plain text or SSML), `voice`, `speed` (0.5 to 2.0) and `sample_rate` (8000 to 48000, the audio is resampled on the service side).
+
+Jobs that fail with a transient error are put back on the request topic with an incremented attempt counter. After `JOB_MAX_ATTEMPTS` the job is marked `failed` and the request is published to the dead-letter topic with the failure reason. A redelivered message for a job that is already `done` is ignored.
 
 Python client:
 
