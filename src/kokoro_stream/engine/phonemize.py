@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from typing import Protocol
 
 from kokoro_stream.engine.base import EngineError
@@ -20,9 +21,11 @@ class MisakiPhonemizer:
             raise EngineError("misaki is not installed") from error
         fallback = espeak.EspeakFallback(british=british)
         self._g2p = en.G2P(trf=False, british=british, fallback=fallback)
+        self._lock = threading.Lock()
 
     def phonemize(self, text: str) -> str:
-        phonemes, _ = self._g2p(text)
+        with self._lock:
+            phonemes, _ = self._g2p(text)
         return WHITESPACE.sub(" ", phonemes).strip()
 
 
@@ -33,6 +36,7 @@ class EspeakPhonemizer:
         except ImportError as error:
             raise EngineError("phonemizer is not installed") from error
         self._configure_library()
+        self._lock = threading.Lock()
         self._backend = EspeakBackend(
             language, preserve_punctuation=True, with_stress=True, language_switch="remove-flags"
         )
@@ -48,7 +52,8 @@ class EspeakPhonemizer:
         EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
 
     def phonemize(self, text: str) -> str:
-        phonemes = self._backend.phonemize([text.strip()])[0]
+        with self._lock:
+            phonemes = self._backend.phonemize([text.strip()])[0]
         return WHITESPACE.sub(" ", phonemes).strip()
 
 
