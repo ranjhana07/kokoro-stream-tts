@@ -53,3 +53,35 @@ def test_results_are_written_as_json_and_csv(tmp_path):
     assert len(document["rows"]) == 2
     header = csv_path.read_text(encoding="utf-8").splitlines()[0]
     assert header == "scenario,mode,ttfa_ms,extra"
+
+
+def test_cli_runs_a_sine_scenario_and_writes_files(tmp_path, capsys):
+    from kokoro_stream.bench.cli import main
+
+    prompts = tmp_path / "prompts"
+    prompts.mkdir()
+    (prompts / "tiny.txt").write_text("One short line.\nAnd a second line right after it.\n", encoding="utf-8")
+    code = main(
+        [
+            "--scenario", "ttfa", "--engine", "sine", "--name", "cli-test",
+            "--out-dir", str(tmp_path / "out"), "--prompts-dir", str(prompts),
+            "--prompts", "tiny", "--repetitions", "1",
+        ]
+    )
+    assert code == 0
+    assert (tmp_path / "out" / "cli-test.json").exists()
+    assert (tmp_path / "out" / "cli-test.csv").exists()
+    assert "tiny/stream" in capsys.readouterr().out
+
+
+def test_settings_from_args_applies_overrides():
+    from kokoro_stream.bench.cli import build_parser, settings_from_args
+
+    args = build_parser().parse_args(
+        ["--scenario", "ttfa", "--name", "x", "--engine", "sine", "--depth", "5", "--workers", "9", "--first-chunk-chars", "30", "--no-trim", "--no-cache"]
+    )
+    settings = settings_from_args(args)
+    assert (settings.prefetch_depth, settings.prefetch_workers, settings.first_chunk_chars) == (5, 9, 30)
+    assert settings.trim_silence is False
+    assert settings.chunk_cache_mb == 0
+    assert settings.max_streams == 0
