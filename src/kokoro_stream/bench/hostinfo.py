@@ -5,6 +5,7 @@ import platform
 import re
 import subprocess
 import sys
+import time
 from importlib import metadata
 
 
@@ -34,6 +35,37 @@ def cpu_model() -> str:
     return platform.processor() or "unknown"
 
 
+def _system_times() -> tuple[int, int]:
+    if platform.system() == "Windows":
+        import ctypes
+        from ctypes import wintypes
+
+        idle, kernel, user = wintypes.FILETIME(), wintypes.FILETIME(), wintypes.FILETIME()
+        ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user))
+
+        def combine(value: wintypes.FILETIME) -> int:
+            return (value.dwHighDateTime << 32) | value.dwLowDateTime
+
+        total = combine(kernel) + combine(user)
+        return combine(idle), total
+    with open("/proc/stat", encoding="utf-8") as handle:
+        fields = [int(value) for value in handle.readline().split()[1:]]
+    return fields[3] + fields[4], sum(fields)
+
+
+def cpu_utilization(interval: float = 1.0) -> float | None:
+    try:
+        idle_before, total_before = _system_times()
+        time.sleep(interval)
+        idle_after, total_after = _system_times()
+    except (OSError, ImportError, AttributeError, ValueError):
+        return None
+    total = total_after - total_before
+    if total <= 0:
+        return None
+    return round(100.0 * (1.0 - (idle_after - idle_before) / total), 1)
+
+
 def package_version(name: str) -> str:
     try:
         return metadata.version(name)
@@ -50,4 +82,5 @@ def collect() -> dict[str, object]:
         "numpy": package_version("numpy"),
         "onnxruntime": package_version("onnxruntime"),
         "flask": package_version("flask"),
+        "cpu_utilization_before_run_percent": cpu_utilization(),
     }
