@@ -31,6 +31,7 @@ dev = ["pytest>=8.0"]
 kokoro-client = "kokoro_stream.client:main"
 kokoro-loadtest = "kokoro_stream.loadtest:main"
 kokoro-worker = "kokoro_stream.jobs.worker:main"
+kokoro-bench = "kokoro_stream.bench.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
