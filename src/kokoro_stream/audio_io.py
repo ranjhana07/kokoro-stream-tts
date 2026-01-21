@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import struct
 import wave
 from pathlib import Path
 from types import TracebackType
@@ -18,6 +19,23 @@ def encode_wav(samples: np.ndarray, sample_rate: int) -> bytes:
         writer.setframerate(sample_rate)
         writer.writeframes(float_to_pcm16(samples).tobytes())
     return buffer.getvalue()
+
+
+UNKNOWN_SIZE = 0xFFFFFFFF
+
+
+def streaming_wav_header(sample_rate: int, channels: int = 1) -> bytes:
+    byte_rate = sample_rate * channels * 2
+    return b"".join(
+        [
+            b"RIFF",
+            struct.pack("<I", UNKNOWN_SIZE),
+            b"WAVEfmt ",
+            struct.pack("<IHHIIHH", 16, 1, channels, sample_rate, byte_rate, channels * 2, 16),
+            b"data",
+            struct.pack("<I", UNKNOWN_SIZE),
+        ]
+    )
 
 
 class WavFileWriter:
