@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import json
-import time
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -22,7 +21,6 @@ def write_results(
     csv_path = directory / f"{name}.csv"
     document = {
         "name": name,
-        "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "host": hostinfo.collect(),
         "settings": settings,
         "arguments": arguments,
