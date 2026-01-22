@@ -219,3 +219,32 @@ def test_streams_beyond_the_limit_get_429():
     third = client.post("/v1/tts/stream", json={"text": TEXT})
     assert third.status_code == 200
     assert "tts_rejected_streams_total 1.0" in client.get("/metrics").data.decode()
+
+
+def test_pcm_format_is_headerless_audio(client):
+    body = {"text": TEXT, "voice": "sine_mid", "format": "pcm"}
+    response = client.post("/v1/tts/stream", json=body)
+    assert response.mimetype == "audio/L16"
+    assert "rate=24000" in response.headers["Content-Type"]
+    frames = decode_all(client.post("/v1/tts/stream", json={**body, "format": "frames"}).data)
+    expected = b"".join(frame.payload for frame in frames[:-1])
+    assert response.data == expected
+
+
+def test_wav_format_starts_with_a_riff_header(client):
+    response = client.post("/v1/tts/stream", json={"text": TEXT, "voice": "sine_mid", "format": "wav"})
+    assert response.mimetype == "audio/wav"
+    assert response.data[:4] == b"RIFF"
+    assert response.data[36:40] == b"data"
+    assert len(response.data) > 44
+
+
+def test_unknown_format_is_rejected(client):
+    response = client.post("/v1/tts/stream", json={"text": "hi", "format": "mp3"})
+    assert response.status_code == 400
+    assert "format" in response.json["error"]
+
+
+def test_non_frame_formats_still_record_ttfa(client):
+    client.post("/v1/tts/stream", json={"text": TEXT, "voice": "sine_mid", "format": "pcm"})
+    assert "tts_time_to_first_audio_seconds_count 1.0" in client.get("/metrics").data.decode()
