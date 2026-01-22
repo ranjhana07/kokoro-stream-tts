@@ -180,6 +180,8 @@ Other endpoints:
 
 Request fields for `/v1/tts` and `/v1/tts/stream`: `text` (plain text or SSML), `voice`, `speed` (0.5 to 2.0) and `sample_rate` (8000 to 48000, the audio is resampled on the service side).
 
+`/v1/tts/stream` also accepts `format`: `frames` (default, the framed protocol above), `pcm` (raw int16 little-endian samples, rate in the `Content-Type`) or `wav` (a WAV header with unknown length followed by PCM, playable by `ffplay` or a browser). The last two have no way to report an error after the response has started, so the connection is simply closed.
+
 Jobs that fail with a transient error are put back on the request topic with an incremented attempt counter. After `JOB_MAX_ATTEMPTS` the job is marked `failed` and the request is published to the dead-letter topic with the failure reason. A redelivered message for a job that is already `done` is ignored.
 
 Python client:
