@@ -13,7 +13,7 @@ from kokoro_stream.streaming.crossfade import Crossfader
 from kokoro_stream.streaming.frames import encode_audio, encode_end, encode_error, float_to_pcm16
 from kokoro_stream.streaming.prefetch import PrefetchPool, StreamPrefetcher
 from kokoro_stream.text.chunker import Chunk, ChunkBudget, plan_chunks
-from kokoro_stream.text.ssml import parse_ssml
+from kokoro_stream.text.ssml import SSMLError, parse_ssml
 
 ChunkObserver = Callable[[float], None]
 
@@ -37,7 +37,12 @@ class StreamingSynthesizer:
         )
 
     def prepare(self, text: str) -> list[Chunk]:
-        return plan_chunks(parse_ssml(text), self._budget)
+        chunks = plan_chunks(parse_ssml(text), self._budget)
+        known = set(self.engine.voices())
+        for chunk in chunks:
+            if chunk.voice is not None and chunk.voice not in known:
+                raise SSMLError(f"unknown voice in markup: {chunk.voice}")
+        return chunks
 
     def speech_audio(self, text: str, voice: str, speed: float, output_rate: int) -> np.ndarray:
         key = (voice, round(speed, 3), text, output_rate, self.settings.trim_silence)
@@ -60,7 +65,9 @@ class StreamingSynthesizer:
         output_rate = output_rate or self.engine.sample_rate
         started = time.perf_counter()
         if chunk.text:
-            audio = self.speech_audio(chunk.text, voice, speed * chunk.speed, output_rate)
+            audio = self.speech_audio(
+                chunk.text, chunk.voice or voice, speed * chunk.speed, output_rate
+            )
         else:
             audio = np.zeros(0, dtype=np.float32)
         if chunk.pause_ms:
