@@ -10,7 +10,7 @@ from kokoro_stream.engine.base import SpeechEngine
 from kokoro_stream.streaming.audio import resample, trim_silence
 from kokoro_stream.streaming.cache import ChunkCache
 from kokoro_stream.streaming.crossfade import Crossfader
-from kokoro_stream.streaming.frames import encode_audio, encode_end, encode_error
+from kokoro_stream.streaming.frames import encode_audio, encode_end, encode_error, float_to_pcm16
 from kokoro_stream.streaming.prefetch import PrefetchPool, StreamPrefetcher
 from kokoro_stream.text.chunker import Chunk, ChunkBudget, plan_chunks
 from kokoro_stream.text.ssml import parse_ssml
@@ -104,6 +104,19 @@ class StreamingSynthesizer:
             yield encode_end(sequence, sample_rate)
         except Exception as error:
             yield encode_error(sequence, f"{type(error).__name__}: {error}", sample_rate)
+
+    def pcm_stream(
+        self,
+        chunks: list[Chunk],
+        voice: str,
+        speed: float = 1.0,
+        sample_rate: int | None = None,
+        header: bytes = b"",
+    ) -> Iterator[bytes]:
+        if header:
+            yield header
+        for audio in self.render(chunks, voice, speed, sample_rate):
+            yield float_to_pcm16(audio).tobytes()
 
     def synthesize(
         self, chunks: list[Chunk], voice: str, speed: float = 1.0, sample_rate: int | None = None

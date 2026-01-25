@@ -9,7 +9,7 @@ from typing import Iterator, Sequence
 
 from flask import Flask, Response, g, jsonify, request
 
-from kokoro_stream.audio_io import encode_wav
+from kokoro_stream.audio_io import encode_wav, streaming_wav_header
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import EngineError, SpeechEngine, warm_up
 from kokoro_stream.engine.factory import build_engine
@@ -29,6 +29,7 @@ from kokoro_stream.text.ssml import SSMLError
 logger = logging.getLogger(__name__)
 
 STREAM_MIMETYPE = "application/x-kokoro-frames"
+STREAM_FORMATS = ("frames", "pcm", "wav")
 MIN_SPEED = 0.5
 MAX_SPEED = 2.0
 MIN_SAMPLE_RATE = 8000
@@ -45,6 +46,7 @@ class TTSRequest:
     voice: str
     speed: float
     sample_rate: int
+    output_format: str = "frames"
 
 
 def parse_request(
@@ -76,11 +78,20 @@ def parse_request(
         raise RequestError("sample_rate must be an integer") from error
     if not MIN_SAMPLE_RATE <= sample_rate <= MAX_SAMPLE_RATE:
         raise RequestError(f"sample_rate must be between {MIN_SAMPLE_RATE} and {MAX_SAMPLE_RATE}")
-    return TTSRequest(text=text, voice=voice, speed=speed, sample_rate=sample_rate)
+    output_format = str(payload.get("format", "frames")).lower()
+    if output_format not in STREAM_FORMATS:
+        raise RequestError(f"format must be one of {', '.join(STREAM_FORMATS)}")
+    return TTSRequest(
+        text=text, voice=voice, speed=speed, sample_rate=sample_rate, output_format=output_format
+    )
 
 
 def instrument_stream(
-    frames: Iterator[bytes], metrics: Metrics, started: float, request_id: str = ""
+    frames: Iterator[bytes],
+    metrics: Metrics,
+    started: float,
+    request_id: str = "",
+    detect_errors: bool = True,
 ) -> Iterator[bytes]:
     metrics.active_streams.inc()
     first_frame = True
@@ -92,7 +103,7 @@ def instrument_stream(
                 metrics.ttfa.observe(time.perf_counter() - started)
                 logger.info("stream %s first frame after %.0f ms", request_id, (time.perf_counter() - started) * 1000)
                 first_frame = False
-            if frame[5] == FrameType.ERROR:
+            if detect_errors and frame[5] == FrameType.ERROR:
                 metrics.stream_errors.inc()
                 logger.warning("stream %s ended with an error frame", request_id)
             yield frame
@@ -207,13 +218,24 @@ def create_app(
             response.status_code = 429
             response.headers["Retry-After"] = "1"
             return response
-        frames = synthesizer.frames(
-            chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate
-        )
+        if tts_request.output_format == "frames":
+            source = synthesizer.frames(
+                chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate
+            )
+            mimetype = STREAM_MIMETYPE
+        else:
+            header = streaming_wav_header(tts_request.sample_rate) if tts_request.output_format == "wav" else b""
+            source = synthesizer.pcm_stream(
+                chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate, header
+            )
+            mimetype = "audio/wav" if header else f"audio/L16;rate={tts_request.sample_rate};channels=1"
         body = ReleasingIterator(
-            instrument_stream(frames, metrics, started, g.request_id), limiter.release
+            instrument_stream(
+                source, metrics, started, g.request_id, detect_errors=tts_request.output_format == "frames"
+            ),
+            limiter.release,
         )
-        response = Response(body, mimetype=STREAM_MIMETYPE)
+        response = Response(body, mimetype=mimetype)
         response.headers["X-Sample-Rate"] = str(tts_request.sample_rate)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Accel-Buffering"] = "no"

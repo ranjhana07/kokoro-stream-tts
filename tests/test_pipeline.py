@@ -150,3 +150,20 @@ def test_cache_key_includes_voice_and_speed(pool, settings):
     synthesizer.synthesize(chunks, "v", speed=1.0)
     synthesizer.synthesize(chunks, "v", speed=1.2)
     assert engine.calls == 2
+
+
+def test_pcm_stream_matches_rendered_audio(synthesizer):
+    from kokoro_stream.streaming.frames import float_to_pcm16
+
+    chunks = synthesizer.prepare(TEXT)
+    pieces = list(synthesizer.pcm_stream(chunks, "sine_mid", header=b"HDR"))
+    assert pieces[0] == b"HDR"
+    raw = b"".join(pieces[1:])
+    expected = float_to_pcm16(synthesizer.synthesize(chunks, "sine_mid")).tobytes()
+    assert raw == expected
+
+
+def test_pcm_stream_without_header_starts_with_audio(synthesizer):
+    chunks = synthesizer.prepare("Just one short sentence.")
+    first = next(iter(synthesizer.pcm_stream(chunks, "sine_mid")))
+    assert len(first) > 0 and len(first) % 2 == 0
