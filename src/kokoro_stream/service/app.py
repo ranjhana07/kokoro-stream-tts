@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Sequence
 
-from flask import Flask, Response, g, jsonify, request
+from flask import Flask, Response, g, jsonify, request, send_file
 
 from kokoro_stream.audio_io import encode_wav, streaming_wav_header
 from kokoro_stream.config import Settings
@@ -262,5 +262,20 @@ def create_app(
         if status is None:
             return jsonify(error="job not found"), 404
         return jsonify(status.to_dict())
+
+    @app.get("/v1/jobs/<job_id>/audio")
+    def job_audio(job_id: str):
+        status = job_store.get(job_id)
+        if status is None:
+            return jsonify(error="job not found"), 404
+        if status.state is not JobState.DONE:
+            return jsonify(error=f"job is {status.state.value}"), 409
+        if status.output.startswith("s3://"):
+            return jsonify(location=status.output)
+        root = Path(settings.job_output).resolve()
+        target = Path(status.output).resolve()
+        if root != target.parent or not target.is_file():
+            return jsonify(error="audio file is not available"), 404
+        return send_file(target, mimetype="audio/wav", download_name=f"{job_id}.wav")
 
     return app

@@ -78,3 +78,51 @@ def test_enqueue_failure_marks_job_failed(tmp_path):
 def test_invalid_job_body_is_rejected(tmp_path):
     client = make_client(tmp_path, RecordingPublisher())
     assert client.post("/v1/jobs", json={"voice": "sine_low"}).status_code == 400
+
+
+def make_client_with_output(tmp_path):
+    settings = Settings(default_voice="sine_mid", output_dir=str(tmp_path), job_output=str(tmp_path / "audio"))
+    app = create_app(
+        settings,
+        SineEngine(sample_rate=settings.sample_rate),
+        publisher=RecordingPublisher(),
+        job_store=FileJobStore(tmp_path / "status"),
+    )
+    return app.test_client(), FileJobStore(tmp_path / "status")
+
+
+def test_finished_job_audio_can_be_downloaded(tmp_path):
+    client, store = make_client_with_output(tmp_path)
+    (tmp_path / "audio").mkdir()
+    job_id = new_job_id()
+    target = tmp_path / "audio" / f"{job_id}.wav"
+    target.write_bytes(b"RIFFdata")
+    store.put(JobStatus(job_id, JobState.DONE, output=str(target), duration=1.0))
+    response = client.get(f"/v1/jobs/{job_id}/audio")
+    assert response.status_code == 200
+    assert response.mimetype == "audio/wav"
+    assert response.data == b"RIFFdata"
+
+
+def test_audio_is_not_served_before_the_job_is_done(tmp_path):
+    client, store = make_client_with_output(tmp_path)
+    job_id = new_job_id()
+    store.put(JobStatus(job_id, JobState.RUNNING))
+    assert client.get(f"/v1/jobs/{job_id}/audio").status_code == 409
+    assert client.get(f"/v1/jobs/{new_job_id()}/audio").status_code == 404
+
+
+def test_audio_outside_the_output_directory_is_refused(tmp_path):
+    client, store = make_client_with_output(tmp_path)
+    secret = tmp_path / "secret.txt"
+    secret.write_text("nope")
+    job_id = new_job_id()
+    store.put(JobStatus(job_id, JobState.DONE, output=str(secret)))
+    assert client.get(f"/v1/jobs/{job_id}/audio").status_code == 404
+
+
+def test_s3_outputs_are_reported_as_locations(tmp_path):
+    client, store = make_client_with_output(tmp_path)
+    job_id = new_job_id()
+    store.put(JobStatus(job_id, JobState.DONE, output="s3://bucket/a.wav"))
+    assert client.get(f"/v1/jobs/{job_id}/audio").json == {"location": "s3://bucket/a.wav"}
