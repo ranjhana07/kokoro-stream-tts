@@ -155,3 +155,27 @@ def test_blank_lines_in_plain_text_become_paragraph_pauses():
 
 def test_single_newlines_stay_inside_one_segment():
     assert parse_ssml("line one\nline two") == [SpeechSegment("line one line two")]
+
+
+def test_voice_element_sets_voice_for_its_content():
+    segments = parse_ssml('<speak>Hello. <voice name="am_adam">Switched.</voice> Back again.</speak>')
+    assert [(segment.text, segment.voice) for segment in segments] == [
+        ("Hello.", None),
+        ("Switched.", "am_adam"),
+        ("Back again.", None),
+    ]
+
+
+def test_nested_voice_uses_innermost_name():
+    segments = parse_ssml('<speak><voice name="a">x <voice name="b">y</voice> z</voice></speak>')
+    assert [segment.voice for segment in segments] == ["a", "b", "a"]
+
+
+def test_voice_without_name_is_an_error():
+    with pytest.raises(SSMLError):
+        parse_ssml("<speak><voice>oops</voice></speak>")
+
+
+def test_prosody_inside_voice_keeps_both():
+    segment = parse_ssml('<speak><voice name="a"><prosody rate="slow">hi</prosody></voice></speak>')[0]
+    assert (segment.voice, segment.speed) == ("a", 0.75)

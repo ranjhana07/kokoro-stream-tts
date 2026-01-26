@@ -38,6 +38,7 @@ class SSMLError(ValueError):
 class SpeechSegment:
     text: str
     speed: float = 1.0
+    voice: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ Segment = Union[SpeechSegment, PauseSegment]
 @dataclass(frozen=True)
 class Context:
     speed: float = 1.0
+    voice: str | None = None
 
 
 def is_ssml(text: str) -> bool:
@@ -117,7 +119,9 @@ class SegmentBuilder:
         self._pending = []
         spoken = normalize_text(joined)
         if spoken:
-            self.segments.append(SpeechSegment(spoken, self._pending_context.speed))
+            self.segments.append(
+                SpeechSegment(spoken, self._pending_context.speed, self._pending_context.voice)
+            )
 
     def finish(self) -> list[Segment]:
         self.flush()
@@ -140,6 +144,11 @@ def walk(element: ElementTree.Element, context: Context, builder: SegmentBuilder
     inner = context
     if tag == "prosody" and element.get("rate"):
         inner = replace(context, speed=clamp_speed(context.speed * parse_rate(element.get("rate", ""))))
+    elif tag == "voice":
+        name = element.get("name")
+        if not name:
+            raise SSMLError("voice requires a name")
+        inner = replace(context, voice=name)
     elif tag == "emphasis":
         level = element.get("level", "moderate").lower()
         if level not in EMPHASIS_SPEED:

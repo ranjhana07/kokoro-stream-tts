@@ -167,3 +167,33 @@ def test_pcm_stream_without_header_starts_with_audio(synthesizer):
     chunks = synthesizer.prepare("Just one short sentence.")
     first = next(iter(synthesizer.pcm_stream(chunks, "sine_mid")))
     assert len(first) > 0 and len(first) % 2 == 0
+
+
+class VoiceRecordingEngine:
+    sample_rate = 24000
+
+    def __init__(self):
+        self.seen = []
+
+    def voices(self):
+        return ["alpha", "beta"]
+
+    def synthesize(self, text, voice, speed=1.0):
+        self.seen.append((text, voice))
+        return np.full(3000, 0.2, dtype=np.float32)
+
+
+def test_voice_element_routes_chunks_to_that_voice(pool, settings):
+    engine = VoiceRecordingEngine()
+    synthesizer = StreamingSynthesizer(engine, pool, settings)
+    chunks = synthesizer.prepare('<speak>Plain line. <voice name="beta">Second voice.</voice></speak>')
+    synthesizer.synthesize(chunks, "alpha")
+    assert sorted(engine.seen) == [("Plain line.", "alpha"), ("Second voice.", "beta")]
+
+
+def test_unknown_voice_in_markup_is_rejected_up_front(pool, settings):
+    from kokoro_stream.text.ssml import SSMLError
+
+    synthesizer = StreamingSynthesizer(VoiceRecordingEngine(), pool, settings)
+    with pytest.raises(SSMLError, match="gamma"):
+        synthesizer.prepare('<speak><voice name="gamma">hi</voice></speak>')

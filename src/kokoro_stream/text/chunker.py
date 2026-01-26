@@ -34,6 +34,7 @@ class Chunk:
     text: str
     speed: float = 1.0
     pause_ms: int = 0
+    voice: str | None = None
 
 
 def split_sentences(text: str) -> list[str]:
@@ -137,6 +138,6 @@ def plan_chunks(segments: list[Segment], budget: ChunkBudget | None = None) -> l
                 chunks.append(Chunk("", pause_ms=segment.duration_ms))
             continue
         for text in split_text(segment.text, budget, first_chunk=not spoken_any):
-            chunks.append(Chunk(text, speed=segment.speed))
+            chunks.append(Chunk(text, speed=segment.speed, voice=segment.voice))
             spoken_any = True
     return chunks
