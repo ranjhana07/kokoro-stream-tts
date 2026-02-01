@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from kokoro_stream.text import numbers
-from kokoro_stream.text.normalizer import MONTHS, normalize_text, say_integer
+from kokoro_stream.text.normalizer import MONTHS, normalize_text
 
 CURRENCY_CODES = {"USD": "$", "EUR": "€", "GBP": "£", "INR": "₹"}
 DATE_FIELDS = {

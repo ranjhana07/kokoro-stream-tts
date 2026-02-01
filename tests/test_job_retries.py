@@ -1,7 +1,6 @@
 import json
 
 import numpy as np
-import pytest
 
 from kokoro_stream.jobs.kafka_io import KafkaJobPublisher
 from kokoro_stream.jobs.models import JobRequest, JobState, new_job_id

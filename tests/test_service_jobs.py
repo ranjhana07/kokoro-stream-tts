@@ -1,8 +1,7 @@
-import pytest
 
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.sine import SineEngine
-from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus, new_job_id
+from kokoro_stream.jobs.models import JobState, JobStatus, new_job_id
 from kokoro_stream.jobs.store import FileJobStore
 from kokoro_stream.service.app import create_app
 
