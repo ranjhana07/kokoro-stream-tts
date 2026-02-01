@@ -117,3 +117,19 @@ def test_versions_and_thousands(raw, expected):
 )
 def test_fractions_dates_and_phone_numbers(raw, expected):
     assert normalize_text(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("raised $5m", "raised five million dollars"),
+        ("a $2.5bn deal", "a two point five billion dollars deal"),
+        ("fees of $300k.", "fees of three hundred thousand dollars."),
+        ("worth €3 million", "worth three million euros"),
+        ("only $5 more", "only five dollars more"),
+        ("$12.50 each", "twelve dollars and fifty cents each"),
+        ("$7 mattered", "seven dollars mattered"),
+    ],
+)
+def test_currency_magnitude_suffixes(raw, expected):
+    assert normalize_text(raw) == expected

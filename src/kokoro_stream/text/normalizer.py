@@ -64,8 +64,10 @@ UNITS = {
     "°f": ("degree fahrenheit", "degrees fahrenheit"),
 }
 
+MAGNITUDE_SUFFIXES = {"k": "thousand", "m": "million", "b": "billion", "bn": "billion"}
+
 CURRENCY_PATTERN = re.compile(
-    r"([$€£₹])\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?:\s(thousand|million|billion|trillion))?(?![\w])"
+    r"([$€£₹])\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?:(?:\s(thousand|million|billion|trillion))|(?:\s?(bn|[kKmMbB]))(?![\w]))?(?![\w])"
 )
 PERCENT_PATTERN = re.compile(r"(?<![\w.])(-?\d{1,3}(?:,\d{3})+|-?\d+)(?:\.(\d+))?\s?%")
 DECIMAL_PATTERN = re.compile(r"(?<![\w.])(-?)(\d+)\.(\d+)(?![\w])")
@@ -164,8 +166,9 @@ def expand_iso_date(match: re.Match[str]) -> str:
 
 
 def expand_currency(match: re.Match[str]) -> str:
-    symbol, whole_text, fraction_text, magnitude = match.groups()
+    symbol, whole_text, fraction_text, magnitude_word, magnitude_suffix = match.groups()
     singular, plural, minor_singular, minor_plural = CURRENCIES[symbol]
+    magnitude = magnitude_word or MAGNITUDE_SUFFIXES.get((magnitude_suffix or "").lower())
     if magnitude:
         amount = say_decimal(whole_text, fraction_text) if fraction_text else say_integer(whole_text)
         return f"{amount} {magnitude} {plural}"
