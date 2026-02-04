@@ -133,3 +133,20 @@ def test_fractions_dates_and_phone_numbers(raw, expected):
 )
 def test_currency_magnitude_suffixes(raw, expected):
     assert normalize_text(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("see Chapter IV for details", "see Chapter four for details"),
+        ("Part XII", "Part twelve"),
+        ("Henry VIII ruled", "Henry the eighth ruled"),
+        ("during World War II.", "during World War two."),
+        ("Pope Benedict XVI", "Pope Benedict the sixteenth"),
+        ("Section IIII is invalid", "Section IIII is invalid"),
+        ("I think so", "I think so"),
+        ("Chapter 7", "Chapter seven"),
+    ],
+)
+def test_roman_numerals(raw, expected):
+    assert normalize_text(raw) == expected

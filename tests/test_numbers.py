@@ -70,3 +70,20 @@ def test_decimal():
 )
 def test_year(value, expected):
     assert year(value) == expected
+
+
+from kokoro_stream.text.numbers import roman_to_int
+
+
+@pytest.mark.parametrize(
+    "text, value",
+    [("I", 1), ("IV", 4), ("IX", 9), ("XIV", 14), ("XL", 40), ("XCIX", 99), ("MCMXCIV", 1994), ("MMXXIV", 2024)],
+)
+def test_roman_to_int(text, value):
+    assert roman_to_int(text) == value
+
+
+@pytest.mark.parametrize("text", ["", "IIII", "VX", "ABC", "IC"])
+def test_roman_to_int_rejects_invalid(text):
+    with pytest.raises(ValueError):
+        roman_to_int(text)
