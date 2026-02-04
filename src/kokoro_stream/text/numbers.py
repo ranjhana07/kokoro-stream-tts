@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 ONES = (
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
     "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
@@ -95,3 +97,20 @@ def year(value: int) -> str:
         return f"{cardinal(high)} hundred"
     low_words = f"oh {ONES[low]}" if low < 10 else cardinal(low)
     return f"{cardinal(high)} {low_words}"
+
+
+ROMAN_VALUES = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+ROMAN_PATTERN = re.compile(r"^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$")
+
+
+def roman_to_int(text: str) -> int:
+    if not text or not ROMAN_PATTERN.match(text):
+        raise ValueError(f"not a roman numeral: {text!r}")
+    total = 0
+    for index, char in enumerate(text):
+        value = ROMAN_VALUES[char]
+        if index + 1 < len(text) and ROMAN_VALUES[text[index + 1]] > value:
+            total -= value
+        else:
+            total += value
+    return total

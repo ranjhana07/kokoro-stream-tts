@@ -97,6 +97,10 @@ UNIT_PATTERN = re.compile(
     + r")(?![\w/])",
     re.IGNORECASE,
 )
+SECTION_ROMAN_PATTERN = re.compile(r"\b(Chapter|Part|Section|Act|Book|Volume|Vol\.|Appendix|Phase|Level)\s+([IVXLCDM]{1,8})\b")
+ROYAL_ROMAN_PATTERN = re.compile(
+    r"\b(Henry|Louis|George|Charles|Edward|Elizabeth|Richard|William|James|John|Pope [A-Z][a-z]+|World War|Super Bowl)\s+([IVXLCDM]{1,8})\b"
+)
 RANGE_PATTERN = re.compile(r"(?<![\w.-])(\d+)\s?[-–]\s?(\d+)(?![\w-])")
 FRACTION_PATTERN = re.compile(r"(?<![\w./])(\d{1,2})/(\d{1,2})(?![\w/]|\.\d)")
 PHONE_PATTERN = re.compile(r"(?<![\w-])(\+?1[-. ])?\(?(\d{3})\)?[-. ](\d{3})[-. ](\d{4})(?![\w-])")
@@ -251,6 +255,25 @@ def expand_slash_date(match: re.Match[str]) -> str:
     return f"{MONTHS[month - 1]} {numbers.ordinal(day)} {numbers.year(year_text)}"
 
 
+def expand_section_roman(match: re.Match[str]) -> str:
+    label, numeral = match.groups()
+    try:
+        return f"{label} {numbers.cardinal(numbers.roman_to_int(numeral))}"
+    except ValueError:
+        return match.group(0)
+
+
+def expand_royal_roman(match: re.Match[str]) -> str:
+    name, numeral = match.groups()
+    try:
+        value = numbers.roman_to_int(numeral)
+    except ValueError:
+        return match.group(0)
+    if name in ("World War", "Super Bowl"):
+        return f"{name} {numbers.cardinal(value)}"
+    return f"{name} the {numbers.ordinal(value)}"
+
+
 def expand_version(match: re.Match[str]) -> str:
     return " point ".join(say_integer(part) for part in match.group(1).split("."))
 
@@ -290,6 +313,8 @@ PASSES: tuple[Callable[[str], str], ...] = (
     lambda text: ABBREVIATION_PATTERN.sub(expand_abbreviation, text),
     lambda text: AMPERSAND_PATTERN.sub(" and ", text),
     lambda text: HASH_PATTERN.sub(lambda match: f"number {say_integer(match.group(1))}", text),
+    lambda text: SECTION_ROMAN_PATTERN.sub(expand_section_roman, text),
+    lambda text: ROYAL_ROMAN_PATTERN.sub(expand_royal_roman, text),
     lambda text: LONG_DATE_PATTERN.sub(expand_long_date, text),
     lambda text: ISO_DATE_PATTERN.sub(expand_iso_date, text),
     lambda text: CURRENCY_PATTERN.sub(expand_currency, text),
