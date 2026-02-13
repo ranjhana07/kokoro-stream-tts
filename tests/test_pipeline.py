@@ -197,3 +197,10 @@ def test_unknown_voice_in_markup_is_rejected_up_front(pool, settings):
     synthesizer = StreamingSynthesizer(VoiceRecordingEngine(), pool, settings)
     with pytest.raises(SSMLError, match="gamma"):
         synthesizer.prepare('<speak><voice name="gamma">hi</voice></speak>')
+
+
+def test_inline_pronunciation_survives_normalization_and_chunking(synthesizer):
+    markup = '<speak>Order 3 coffees. Say <phoneme ph="kɑfi">coffee</phoneme> slowly.</speak>'
+    joined = " ".join(chunk.text for chunk in synthesizer.prepare(markup))
+    assert "Order three coffees." in joined
+    assert "[coffee](/kɑfi/)" in joined
