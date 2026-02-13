@@ -179,3 +179,26 @@ def test_voice_without_name_is_an_error():
 def test_prosody_inside_voice_keeps_both():
     segment = parse_ssml('<speak><voice name="a"><prosody rate="slow">hi</prosody></voice></speak>')[0]
     assert (segment.voice, segment.speed) == ("a", 0.75)
+
+
+def test_phoneme_becomes_inline_pronunciation_markup():
+    markup = '<speak>Say <phoneme alphabet="ipa" ph="təmeɪɾoʊ">tomato</phoneme> twice.</speak>'
+    assert texts(parse_ssml(markup)) == ["Say [tomato](/təmeɪɾoʊ/) twice."]
+
+
+def test_phoneme_defaults_to_ipa():
+    assert texts(parse_ssml('<speak><phoneme ph="kət">cat</phoneme></speak>')) == ["[cat](/kət/)"]
+
+
+@pytest.mark.parametrize(
+    "markup",
+    [
+        '<speak><phoneme alphabet="x-sampa" ph="kQt">cat</phoneme></speak>',
+        "<speak><phoneme>cat</phoneme></speak>",
+        '<speak><phoneme ph="a/b">cat</phoneme></speak>',
+        '<speak><phoneme ph="a)b">cat</phoneme></speak>',
+    ],
+)
+def test_bad_phoneme_elements_are_rejected(markup):
+    with pytest.raises(SSMLError):
+        parse_ssml(markup)
