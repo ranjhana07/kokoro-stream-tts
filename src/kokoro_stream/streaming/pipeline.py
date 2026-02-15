@@ -87,6 +87,7 @@ class StreamingSynthesizer:
             chunks,
             lambda chunk: self.synthesize_chunk(chunk, voice, speed, output_rate),
             depth=self.settings.prefetch_depth,
+            head_first=self.settings.prefetch_head_first,
         )
         try:
             for audio in prefetcher:

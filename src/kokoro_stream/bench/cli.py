@@ -39,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--first-chunk-chars", type=int)
     parser.add_argument("--max-chunk-chars", type=int)
     parser.add_argument("--no-trim", action="store_true")
+    parser.add_argument("--no-head-first", action="store_true", help="start lookahead chunks together with the first chunk")
     parser.add_argument("--cache", action="store_true", help="keep the chunk cache on, repeated prompts then measure cache hits")
     parser.add_argument("--high-priority", action="store_true", help="raise the process priority on a busy host")
     return parser
@@ -64,6 +65,8 @@ def settings_from_args(args: argparse.Namespace) -> Settings:
         overrides["first_chunk_chars"] = args.first_chunk_chars
     if args.max_chunk_chars:
         overrides["max_chunk_chars"] = args.max_chunk_chars
+    if args.no_head_first:
+        overrides["prefetch_head_first"] = False
     if args.no_trim:
         overrides["trim_silence"] = False
     return dataclasses.replace(settings, **overrides).validate()

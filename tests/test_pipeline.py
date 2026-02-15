@@ -204,3 +204,25 @@ def test_inline_pronunciation_survives_normalization_and_chunking(synthesizer):
     joined = " ".join(chunk.text for chunk in synthesizer.prepare(markup))
     assert "Order three coffees." in joined
     assert "[coffee](/kɑfi/)" in joined
+
+
+def test_head_first_setting_reaches_the_prefetcher(pool, settings):
+    from dataclasses import replace
+
+    class GateEngine(CountingEngine):
+        def synthesize(self, text, voice, speed=1.0):
+            import time
+
+            time.sleep(0.05)
+            return super().synthesize(text, voice, speed)
+
+    starts = []
+    for head_first in (True, False):
+        engine = GateEngine()
+        synthesizer = StreamingSynthesizer(engine, pool, replace(settings, prefetch_head_first=head_first))
+        chunks = synthesizer.prepare("One sentence goes here. Two sentences go here too. Three of them now. Four to finish it.")
+        iterator = synthesizer.render(chunks, "v")
+        next(iterator)
+        starts.append(engine.calls)
+        iterator.close()
+    assert starts[0] <= starts[1]

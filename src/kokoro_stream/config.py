@@ -41,6 +41,7 @@ class Settings:
     max_chunk_chars: int = 220
     prefetch_depth: int = 3
     prefetch_workers: int = 4
+    prefetch_head_first: bool = True
     crossfade_ms: int = 60
     trim_silence: bool = True
     chunk_cache_mb: int = 32
@@ -96,6 +97,7 @@ class Settings:
             max_chunk_chars=_read_int(env, "MAX_CHUNK_CHARS", defaults.max_chunk_chars),
             prefetch_depth=_read_int(env, "PREFETCH_DEPTH", defaults.prefetch_depth),
             prefetch_workers=_read_int(env, "PREFETCH_WORKERS", defaults.prefetch_workers),
+            prefetch_head_first=_read_int(env, "PREFETCH_HEAD_FIRST", int(defaults.prefetch_head_first)) != 0,
             crossfade_ms=_read_int(env, "CROSSFADE_MS", defaults.crossfade_ms),
             trim_silence=_read_int(env, "TRIM_SILENCE", int(defaults.trim_silence)) != 0,
             chunk_cache_mb=_read_int(env, "CHUNK_CACHE_MB", defaults.chunk_cache_mb),
