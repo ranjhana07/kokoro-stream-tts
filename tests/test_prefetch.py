@@ -35,7 +35,7 @@ def test_prefetch_runs_ahead_of_consumer(pool):
             started.append(index)
         return index
 
-    prefetcher = StreamPrefetcher(pool, range(10), work, depth=3)
+    prefetcher = StreamPrefetcher(pool, range(10), work, depth=3, head_first=False)
     deadline = time.time() + 2
     while len(started) < 3 and time.time() < deadline:
         time.sleep(0.005)
@@ -172,3 +172,39 @@ def test_shutdown_cancels_pending_and_rejects_new_work():
     assert pending.cancelled() or pending.result(timeout=1) == "never"
     with pytest.raises(RuntimeError):
         pool.submit(lambda: 1)
+
+
+def test_head_first_runs_only_the_first_item_until_it_is_delivered(pool):
+    gate = threading.Event()
+    started = []
+    lock = threading.Lock()
+
+    def work(index):
+        with lock:
+            started.append(index)
+        if index == 0:
+            gate.wait(2)
+        return index
+
+    prefetcher = StreamPrefetcher(pool, range(10), work, depth=3)
+    time.sleep(0.1)
+    assert started == [0]
+    gate.set()
+    assert next(prefetcher) == 0
+    deadline = time.time() + 2
+    while len(started) < 4 and time.time() < deadline:
+        time.sleep(0.005)
+    assert sorted(started)[:4] == [0, 1, 2, 3]
+    assert list(prefetcher) == list(range(1, 10))
+
+
+def test_head_first_propagates_a_head_failure(pool):
+    def work(index):
+        if index == 0:
+            raise RuntimeError("first chunk failed")
+        return index
+
+    prefetcher = StreamPrefetcher(pool, range(3), work, depth=2)
+    with pytest.raises(RuntimeError, match="first chunk failed"):
+        next(prefetcher)
+    prefetcher.close()

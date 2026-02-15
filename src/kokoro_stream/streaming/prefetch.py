@@ -73,6 +73,7 @@ class StreamPrefetcher(Generic[Item, Result]):
         items: Iterable[Item],
         worker: Callable[[Item], Result],
         depth: int = 3,
+        head_first: bool = True,
     ) -> None:
         self._pool = pool
         self._items: Iterator[Item] = iter(items)
@@ -81,10 +82,12 @@ class StreamPrefetcher(Generic[Item, Result]):
         self._window: Deque[Future[Result]] = deque()
         self._submitted = 0
         self._closed = False
+        self._head_pending = head_first
         self._fill()
 
     def _fill(self) -> None:
-        while not self._closed and len(self._window) < self._depth:
+        capacity = 1 if self._head_pending else self._depth
+        while not self._closed and len(self._window) < capacity:
             try:
                 item = next(self._items)
             except StopIteration:
@@ -100,6 +103,11 @@ class StreamPrefetcher(Generic[Item, Result]):
         if not self._window:
             raise StopIteration
         current = self._window.popleft()
+        if self._head_pending:
+            result = current.result()
+            self._head_pending = False
+            self._fill()
+            return result
         self._fill()
         return current.result()
 
