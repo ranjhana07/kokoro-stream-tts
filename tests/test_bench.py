@@ -92,3 +92,10 @@ def test_cache_is_only_enabled_on_request():
 
     args = build_parser().parse_args(["--scenario", "ttfa", "--name", "x", "--engine", "sine", "--cache"])
     assert settings_from_args(args).chunk_cache_mb > 0
+
+
+def test_ttfa_modes_can_be_limited_to_streaming():
+    with running_service(make_settings(), SineEngine()) as url:
+        rows = run_ttfa_comparison(url, {"short": PROMPTS["short"]}, repetitions=2, voice="sine_mid", modes=("stream",))
+    assert {row["mode"] for row in rows} == {"stream"}
+    assert len(rows) == 2

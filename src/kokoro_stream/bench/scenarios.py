@@ -55,14 +55,21 @@ def streaming_latency(url: str, text: str, voice: str | None) -> dict[str, float
     }
 
 
+MODES = {"full": full_synthesis_latency, "stream": streaming_latency}
+
+
 def run_ttfa_comparison(
-    url: str, prompts: dict[str, str], repetitions: int, voice: str | None
+    url: str,
+    prompts: dict[str, str],
+    repetitions: int,
+    voice: str | None,
+    modes: tuple[str, ...] = ("full", "stream"),
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for name, text in prompts.items():
         for repetition in range(repetitions):
-            for mode, measure in (("full", full_synthesis_latency), ("stream", streaming_latency)):
-                measurement = measure(url, text, voice)
+            for mode in modes:
+                measurement = MODES[mode](url, text, voice)
                 rows.append(
                     {
                         "scenario": "ttfa",

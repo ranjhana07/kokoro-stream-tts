@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prompts-dir", type=Path, default=Path("benchmarks/prompts"))
     parser.add_argument("--prompts", default="short,medium,long", help="comma separated prompt names")
     parser.add_argument("--repetitions", type=int, default=5)
+    parser.add_argument("--modes", default="full,stream", help="ttfa scenario only: full, stream or both")
     parser.add_argument("--streams", default="1,5,10,25", help="comma separated stream counts")
     parser.add_argument("--rounds", type=int, default=2)
     parser.add_argument("--voice")
@@ -88,7 +89,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     prompts = load_prompts(args.prompts_dir, names)
     with running_service(settings) as url:
         if args.scenario == "ttfa":
-            rows = run_ttfa_comparison(url, prompts, args.repetitions, args.voice)
+            modes = tuple(mode.strip() for mode in args.modes.split(",") if mode.strip())
+            rows = run_ttfa_comparison(url, prompts, args.repetitions, args.voice, modes)
             summary = summarize_ttfa(rows)
         else:
             counts = [int(value) for value in args.streams.split(",")]
