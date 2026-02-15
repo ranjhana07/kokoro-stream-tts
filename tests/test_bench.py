@@ -78,10 +78,17 @@ def test_settings_from_args_applies_overrides():
     from kokoro_stream.bench.cli import build_parser, settings_from_args
 
     args = build_parser().parse_args(
-        ["--scenario", "ttfa", "--name", "x", "--engine", "sine", "--depth", "5", "--workers", "9", "--first-chunk-chars", "30", "--no-trim", "--no-cache"]
+        ["--scenario", "ttfa", "--name", "x", "--engine", "sine", "--depth", "5", "--workers", "9", "--first-chunk-chars", "30", "--no-trim"]
     )
     settings = settings_from_args(args)
     assert (settings.prefetch_depth, settings.prefetch_workers, settings.first_chunk_chars) == (5, 9, 30)
     assert settings.trim_silence is False
     assert settings.chunk_cache_mb == 0
     assert settings.max_streams == 0
+
+
+def test_cache_is_only_enabled_on_request():
+    from kokoro_stream.bench.cli import build_parser, settings_from_args
+
+    args = build_parser().parse_args(["--scenario", "ttfa", "--name", "x", "--engine", "sine", "--cache"])
+    assert settings_from_args(args).chunk_cache_mb > 0

@@ -39,7 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--first-chunk-chars", type=int)
     parser.add_argument("--max-chunk-chars", type=int)
     parser.add_argument("--no-trim", action="store_true")
-    parser.add_argument("--no-cache", action="store_true")
+    parser.add_argument("--cache", action="store_true", help="keep the chunk cache on, repeated prompts then measure cache hits")
     parser.add_argument("--high-priority", action="store_true", help="raise the process priority on a busy host")
     return parser
 
@@ -53,7 +53,7 @@ def settings_from_args(args: argparse.Namespace) -> Settings:
             "KOKORO_VOCAB_PATH": str(args.model_dir / "config.json"),
         }
     )
-    overrides: dict[str, object] = {"chunk_cache_mb": 0 if args.no_cache else settings.chunk_cache_mb, "max_streams": 0}
+    overrides: dict[str, object] = {"chunk_cache_mb": settings.chunk_cache_mb if args.cache else 0, "max_streams": 0}
     if args.intra_op_threads:
         overrides["intra_op_threads"] = args.intra_op_threads
     if args.workers:
