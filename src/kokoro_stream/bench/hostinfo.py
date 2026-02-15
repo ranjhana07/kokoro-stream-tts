@@ -84,3 +84,16 @@ def collect() -> dict[str, object]:
         "flask": package_version("flask"),
         "cpu_utilization_before_run_percent": cpu_utilization(),
     }
+
+
+def raise_priority() -> bool:
+    try:
+        if platform.system() == "Windows":
+            import ctypes
+
+            handle = ctypes.windll.kernel32.GetCurrentProcess()
+            return bool(ctypes.windll.kernel32.SetPriorityClass(handle, 0x00000080))
+        os.nice(-5)
+        return True
+    except (OSError, AttributeError, ImportError):
+        return False

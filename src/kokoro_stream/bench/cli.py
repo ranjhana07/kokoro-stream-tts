@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from kokoro_stream.bench import hostinfo
 from kokoro_stream.bench.results import write_results
 from kokoro_stream.bench.scenarios import (
     run_concurrency,
@@ -39,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-chunk-chars", type=int)
     parser.add_argument("--no-trim", action="store_true")
     parser.add_argument("--no-cache", action="store_true")
+    parser.add_argument("--high-priority", action="store_true", help="raise the process priority on a busy host")
     return parser
 
 
@@ -78,6 +80,7 @@ def load_prompts(directory: Path, names: Sequence[str]) -> dict[str, str]:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     settings = settings_from_args(args)
+    priority_raised = hostinfo.raise_priority() if args.high_priority else False
     names = [name.strip() for name in args.prompts.split(",") if name.strip()]
     prompts = load_prompts(args.prompts_dir, names)
     with running_service(settings) as url:
@@ -90,6 +93,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             rows = run_concurrency(url, prompts[prompt_name], prompt_name, counts, args.rounds, args.voice)
             summary = summarize_concurrency(rows)
     arguments = {key: str(value) for key, value in vars(args).items()}
+    arguments["priority_raised"] = str(priority_raised)
     json_path, csv_path = write_results(
         args.out_dir, args.name, rows, summary, dataclasses.asdict(settings), arguments
     )
