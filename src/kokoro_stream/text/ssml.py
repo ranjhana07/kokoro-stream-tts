@@ -138,6 +138,9 @@ def walk(element: ElementTree.Element, context: Context, builder: SegmentBuilder
     if tag == "sub":
         builder.add_text(element.get("alias", "".join(element.itertext())), context)
         return
+    if tag == "phoneme":
+        builder.add_text(read_phoneme(element), context)
+        return
     if tag == "say-as":
         builder.add_text(read_say_as(element), context)
         return
@@ -162,6 +165,17 @@ def walk(element: ElementTree.Element, context: Context, builder: SegmentBuilder
         builder.add_pause(SENTENCE_PAUSE_MS)
     elif tag == "p":
         builder.add_pause(PARAGRAPH_PAUSE_MS)
+
+
+def read_phoneme(element: ElementTree.Element) -> str:
+    alphabet = element.get("alphabet", "ipa").lower()
+    if alphabet != "ipa":
+        raise SSMLError(f"unsupported phoneme alphabet: {alphabet!r}")
+    phonemes = element.get("ph", "").strip()
+    if not phonemes or any(char in phonemes for char in "()[]/"):
+        raise SSMLError("phoneme requires a plain ph attribute")
+    word = "".join(element.itertext()).strip() or "word"
+    return f"[{word}](/{phonemes}/)"
 
 
 def read_say_as(element: ElementTree.Element) -> str:

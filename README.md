@@ -40,7 +40,7 @@ The service is a Flask app served by Gunicorn with threaded workers. Long docume
 
 Text pipeline:
 
-1. `text/ssml.py` parses `speak`, `p`, `s`, `break`, `prosody` (rate), `say-as`, `sub`, `emphasis` and `voice` into a list of speech and pause segments. Input that is not SSML is treated as plain text, with blank lines becoming paragraph pauses.
+1. `text/ssml.py` parses `speak`, `p`, `s`, `break`, `prosody` (rate), `say-as`, `sub`, `emphasis`, `voice` and `phoneme` (IPA, passed to the engine as inline pronunciations) into a list of speech and pause segments. Input that is not SSML is treated as plain text, with blank lines becoming paragraph pauses.
 2. `text/normalizer.py` expands integers, decimals, ordinals, currency, percentages, years, dates, clock times, units and abbreviations into words. It is hand written, there is no dependency on a normalization library.
 3. `text/chunker.py` splits on sentence boundaries, keeps the first chunk short so audio can start early, and caps every chunk by a character and phoneme budget.
 

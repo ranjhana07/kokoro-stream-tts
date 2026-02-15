@@ -64,3 +64,39 @@ def test_missing_misaki_raises_engine_error(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", fake_import)
     with pytest.raises(EngineError):
         MisakiPhonemizer()
+
+
+from kokoro_stream.engine.phonemize import split_inline_phonemes
+
+
+def test_split_inline_phonemes():
+    assert split_inline_phonemes("Say [tomato](/təmeɪɾoʊ/) twice.") == [
+        ("Say ", False),
+        ("təmeɪɾoʊ", True),
+        (" twice.", False),
+    ]
+    assert split_inline_phonemes("no markup here") == [("no markup here", False)]
+    assert split_inline_phonemes("[a](/x/)[b](/y/)") == [("x", True), ("y", True)]
+
+
+class EchoBackend:
+    def __init__(self):
+        self.calls = []
+
+    def phonemize(self, texts):
+        self.calls.append(texts[0])
+        return ["<" + texts[0] + ">"]
+
+
+def test_espeak_uses_given_phonemes_for_marked_words():
+    backend = EchoBackend()
+    phonemizer = make_espeak(backend)
+    result = phonemizer.phonemize("Say [tomato](/təmeɪɾoʊ/) twice.")
+    assert result == "<Say> təmeɪɾoʊ <twice.>"
+    assert backend.calls == ["Say", "twice."]
+
+
+def test_espeak_without_markup_is_a_single_call():
+    backend = EchoBackend()
+    assert make_espeak(backend).phonemize("plain words") == "<plain words>"
+    assert backend.calls == ["plain words"]

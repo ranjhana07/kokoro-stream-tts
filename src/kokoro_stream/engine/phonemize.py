@@ -9,6 +9,22 @@ from kokoro_stream.engine.base import EngineError
 WHITESPACE = re.compile(r"\s+")
 
 
+INLINE_PHONEME = re.compile(r"\[([^\]]+)\]\(/([^/]+)/\)")
+
+
+def split_inline_phonemes(text: str) -> list[tuple[str, bool]]:
+    parts: list[tuple[str, bool]] = []
+    position = 0
+    for match in INLINE_PHONEME.finditer(text):
+        if match.start() > position:
+            parts.append((text[position : match.start()], False))
+        parts.append((match.group(2), True))
+        position = match.end()
+    if position < len(text):
+        parts.append((text[position:], False))
+    return parts
+
+
 class Phonemizer(Protocol):
     def phonemize(self, text: str) -> str: ...
 
@@ -52,9 +68,14 @@ class EspeakPhonemizer:
         EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
 
     def phonemize(self, text: str) -> str:
-        with self._lock:
-            phonemes = self._backend.phonemize([text.strip()])[0]
-        return WHITESPACE.sub(" ", phonemes).strip()
+        pieces: list[str] = []
+        for content, is_phonemes in split_inline_phonemes(text):
+            if is_phonemes:
+                pieces.append(content)
+            elif content.strip():
+                with self._lock:
+                    pieces.append(self._backend.phonemize([content.strip()])[0])
+        return WHITESPACE.sub(" ", " ".join(pieces)).strip()
 
 
 def build_phonemizer(preference: str = "auto") -> Phonemizer:
