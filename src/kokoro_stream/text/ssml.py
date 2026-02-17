@@ -19,6 +19,8 @@ BREAK_STRENGTH_MS = {
 SENTENCE_PAUSE_MS = 250
 PARAGRAPH_PAUSE_MS = 600
 MAX_BREAK_MS = 10_000
+MAX_ELEMENTS = 2000
+MAX_DEPTH = 24
 
 RATE_KEYWORDS = {"x-slow": 0.5, "slow": 0.75, "medium": 1.0, "fast": 1.25, "x-fast": 1.5}
 EMPHASIS_SPEED = {"strong": 0.88, "moderate": 0.94, "none": 1.0, "reduced": 1.06}
@@ -209,6 +211,19 @@ def parse_plain(text: str) -> list[Segment]:
     return builder.finish()
 
 
+def check_limits(root: ElementTree.Element) -> None:
+    count = 0
+    stack = [(root, 1)]
+    while stack:
+        element, depth = stack.pop()
+        count += 1
+        if count > MAX_ELEMENTS:
+            raise SSMLError(f"markup has more than {MAX_ELEMENTS} elements")
+        if depth > MAX_DEPTH:
+            raise SSMLError(f"markup is nested deeper than {MAX_DEPTH} levels")
+        stack.extend((child, depth + 1) for child in element)
+
+
 def parse_ssml(markup: str) -> list[Segment]:
     if not is_ssml(markup):
         return parse_plain(markup)
@@ -218,6 +233,7 @@ def parse_ssml(markup: str) -> list[Segment]:
         raise SSMLError(f"malformed SSML: {error}") from error
     if root.tag.lower() != "speak":
         raise SSMLError("root element must be <speak>")
+    check_limits(root)
     builder = SegmentBuilder()
     walk(root, Context(), builder)
     return builder.finish()
