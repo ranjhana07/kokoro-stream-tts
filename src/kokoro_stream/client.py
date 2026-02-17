@@ -40,6 +40,18 @@ class StreamResult:
 
 AudioCallback = Callable[[np.ndarray, int], None]
 
+RETRYABLE_STATUS = frozenset({429, 503})
+MAX_RETRY_DELAY = 5.0
+
+
+def retry_delay(response: requests.Response, attempt: int) -> float:
+    header = response.headers.get("Retry-After", "")
+    try:
+        delay = float(header)
+    except ValueError:
+        delay = 0.25 * (2**attempt)
+    return min(max(delay, 0.0), MAX_RETRY_DELAY)
+
 
 def stream_speech(
     base_url: str,
@@ -51,6 +63,7 @@ def stream_speech(
     session: requests.Session | None = None,
     api_key: str | None = None,
     sample_rate: int | None = None,
+    retries: int = 0,
 ) -> StreamResult:
     payload: dict[str, object] = {"text": text, "speed": speed}
     if voice:
@@ -62,9 +75,17 @@ def stream_speech(
     result = StreamResult()
     decoder = FrameDecoder()
     started = time.perf_counter()
-    with http.post(
-        f"{base_url.rstrip('/')}/v1/tts/stream", json=payload, headers=headers, stream=True, timeout=timeout
-    ) as response:
+    url = f"{base_url.rstrip('/')}/v1/tts/stream"
+    attempt = 0
+    while True:
+        response = http.post(url, json=payload, headers=headers, stream=True, timeout=timeout)
+        if response.status_code not in RETRYABLE_STATUS or attempt >= retries:
+            break
+        delay = retry_delay(response, attempt)
+        response.close()
+        attempt += 1
+        time.sleep(delay)
+    with response:
         if response.status_code != 200:
             raise StreamError(f"HTTP {response.status_code}: {response.text[:200]}")
         for piece in response.iter_content(chunk_size=None):
@@ -96,6 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voice")
     parser.add_argument("--speed", type=float, default=1.0)
     parser.add_argument("--sample-rate", type=int)
+    parser.add_argument("--retries", type=int, default=0, help="retries when the service answers 429 or 503")
     parser.add_argument("--api-key", default=os.environ.get("KOKORO_API_KEY"))
     parser.add_argument("--out", type=Path, help="write the stream to a WAV file")
     return parser
@@ -122,6 +144,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             on_audio=handle_audio,
             api_key=args.api_key,
             sample_rate=args.sample_rate,
+            retries=args.retries,
         )
     except (StreamError, requests.RequestException) as error:
         print(f"error: {error}", file=sys.stderr)
