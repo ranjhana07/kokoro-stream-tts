@@ -1,0 +1,6 @@
+scenario,prompt,prompt_chars,mode,repetition,ttfa_ms,total_ms,audio_s
+ttfa,medium,354,stream,0,3685.444,24802.966,23.682
+ttfa,medium,354,stream,1,3509.199,18388.908,23.682
+ttfa,medium,354,stream,2,2481.886,18138.832,23.682
+ttfa,medium,354,stream,3,1560.02,13614.462,23.682
+ttfa,medium,354,stream,4,1431.26,16795.511,23.682
