@@ -1,0 +1,293 @@
+{
+  "name": "ttfa-full-vs-stream",
+  "host": {
+    "cpu": "13th Gen Intel(R) Core(TM) i5-13420H",
+    "logical_cores": 12,
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "numpy": "2.5.5",
+    "onnxruntime": "1.32.0",
+    "flask": "3.1.3",
+    "cpu_utilization_before_run_percent": 100.0
+  },
+  "settings": {
+    "engine": "kokoro",
+    "model_path": "C:\\Users\\Hp\\AppData\\Local\\Temp\\claude\\322f3ff8ed26200d\\340d0c95-d375-40be-8bb0-6c2b695b6231\\scratchpad\\models\\kokoro-v1.0.int8.onnx",
+    "voices_path": "C:\\Users\\Hp\\AppData\\Local\\Temp\\claude\\322f3ff8ed26200d\\340d0c95-d375-40be-8bb0-6c2b695b6231\\scratchpad\\models\\voices-v1.0.bin",
+    "vocab_path": "C:\\Users\\Hp\\AppData\\Local\\Temp\\claude\\322f3ff8ed26200d\\340d0c95-d375-40be-8bb0-6c2b695b6231\\scratchpad\\models\\config.json",
+    "phonemizer": "auto",
+    "providers": [
+      "CPUExecutionProvider"
+    ],
+    "intra_op_threads": 4,
+    "sample_rate": 24000,
+    "default_voice": "af_heart",
+    "first_chunk_chars": 60,
+    "max_chunk_chars": 220,
+    "prefetch_depth": 3,
+    "prefetch_workers": 4,
+    "prefetch_head_first": true,
+    "crossfade_ms": 60,
+    "trim_silence": true,
+    "chunk_cache_mb": 0,
+    "kafka_bootstrap": "",
+    "kafka_request_topic": "tts.jobs.requests",
+    "kafka_status_topic": "tts.jobs.status",
+    "kafka_dead_letter_topic": "tts.jobs.dead",
+    "kafka_group": "tts-workers",
+    "job_max_attempts": 3,
+    "worker_metrics_port": 9100,
+    "output_dir": "output",
+    "job_output": "output/audio",
+    "api_keys": [],
+    "warmup": true,
+    "max_streams": 0,
+    "max_text_chars": 5000,
+    "max_job_text_chars": 200000
+  },
+  "arguments": {
+    "scenario": "ttfa",
+    "name": "ttfa-full-vs-stream",
+    "out_dir": "C:\\Users\\Hp\\Documents\\projects\\kokoro-stream-tts\\benchmarks\\results",
+    "prompts_dir": "benchmarks\\prompts",
+    "prompts": "short,medium,long",
+    "repetitions": "3",
+    "modes": "full,stream",
+    "streams": "1,5,10,25",
+    "rounds": "2",
+    "voice": "af_heart",
+    "engine": "kokoro",
+    "model_dir": "C:\\Users\\Hp\\AppData\\Local\\Temp\\claude\\322f3ff8ed26200d\\340d0c95-d375-40be-8bb0-6c2b695b6231\\scratchpad\\models",
+    "model_file": "kokoro-v1.0.int8.onnx",
+    "intra_op_threads": "4",
+    "workers": "4",
+    "depth": "3",
+    "first_chunk_chars": "None",
+    "max_chunk_chars": "None",
+    "no_trim": "False",
+    "no_head_first": "False",
+    "cache": "False",
+    "high_priority": "True",
+    "priority_raised": "False"
+  },
+  "summary": {
+    "long/full": {
+      "runs": 3,
+      "ttfa_ms_median": 43764.2,
+      "ttfa_ms_min": 32340.0,
+      "ttfa_ms_max": 52018.8
+    },
+    "long/stream": {
+      "runs": 3,
+      "ttfa_ms_median": 1937.7,
+      "ttfa_ms_min": 1832.3,
+      "ttfa_ms_max": 3414.7
+    },
+    "medium/full": {
+      "runs": 3,
+      "ttfa_ms_median": 30705.4,
+      "ttfa_ms_min": 30268.9,
+      "ttfa_ms_max": 36307.7
+    },
+    "medium/stream": {
+      "runs": 3,
+      "ttfa_ms_median": 5190.3,
+      "ttfa_ms_min": 2816.0,
+      "ttfa_ms_max": 5774.4
+    },
+    "short/full": {
+      "runs": 3,
+      "ttfa_ms_median": 11715.3,
+      "ttfa_ms_min": 11615.1,
+      "ttfa_ms_max": 15620.5
+    },
+    "short/stream": {
+      "runs": 3,
+      "ttfa_ms_median": 5461.2,
+      "ttfa_ms_min": 4520.4,
+      "ttfa_ms_max": 7088.6
+    }
+  },
+  "rows": [
+    {
+      "scenario": "ttfa",
+      "prompt": "short",
+      "prompt_chars": 122,
+      "mode": "full",
+      "repetition": 0,
+      "ttfa_ms": 11615.103,
+      "total_ms": 11639.624,
+      "audio_s": 5.967
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "short",
+      "prompt_chars": 122,
+      "mode": "stream",
+      "repetition": 0,
+      "ttfa_ms": 5461.249,
+      "total_ms": 12888.091,
+      "audio_s": 5.967
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "short",
+      "prompt_chars": 122,
+      "mode": "full",
+      "repetition": 1,
+      "ttfa_ms": 11715.319,
+      "total_ms": 11716.09,
+      "audio_s": 5.967
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "short",
+      "prompt_chars": 122,
+      "mode": "stream",
+      "repetition": 1,
+      "ttfa_ms": 4520.394,
+      "total_ms": 12534.774,
+      "audio_s": 5.967
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "short",
+      "prompt_chars": 122,
+      "mode": "full",
+      "repetition": 2,
+      "ttfa_ms": 15620.456,
+      "total_ms": 15621.488,
+      "audio_s": 5.967
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "short",
+      "prompt_chars": 122,
+      "mode": "stream",
+      "repetition": 2,
+      "ttfa_ms": 7088.633,
+      "total_ms": 17269.985,
+      "audio_s": 5.967
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "medium",
+      "prompt_chars": 354,
+      "mode": "full",
+      "repetition": 0,
+      "ttfa_ms": 36307.72,
+      "total_ms": 36312.688,
+      "audio_s": 23.682
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "medium",
+      "prompt_chars": 354,
+      "mode": "stream",
+      "repetition": 0,
+      "ttfa_ms": 5774.436,
+      "total_ms": 31925.105,
+      "audio_s": 23.682
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "medium",
+      "prompt_chars": 354,
+      "mode": "full",
+      "repetition": 1,
+      "ttfa_ms": 30268.852,
+      "total_ms": 30270.462,
+      "audio_s": 23.682
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "medium",
+      "prompt_chars": 354,
+      "mode": "stream",
+      "repetition": 1,
+      "ttfa_ms": 5190.327,
+      "total_ms": 32291.405,
+      "audio_s": 23.682
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "medium",
+      "prompt_chars": 354,
+      "mode": "full",
+      "repetition": 2,
+      "ttfa_ms": 30705.398,
+      "total_ms": 30707.318,
+      "audio_s": 23.682
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "medium",
+      "prompt_chars": 354,
+      "mode": "stream",
+      "repetition": 2,
+      "ttfa_ms": 2815.986,
+      "total_ms": 22357.585,
+      "audio_s": 23.682
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "long",
+      "prompt_chars": 1171,
+      "mode": "full",
+      "repetition": 0,
+      "ttfa_ms": 52018.81,
+      "total_ms": 52038.328,
+      "audio_s": 70.876
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "long",
+      "prompt_chars": 1171,
+      "mode": "stream",
+      "repetition": 0,
+      "ttfa_ms": 3414.656,
+      "total_ms": 47364.196,
+      "audio_s": 70.876
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "long",
+      "prompt_chars": 1171,
+      "mode": "full",
+      "repetition": 1,
+      "ttfa_ms": 43764.22,
+      "total_ms": 43769.773,
+      "audio_s": 70.876
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "long",
+      "prompt_chars": 1171,
+      "mode": "stream",
+      "repetition": 1,
+      "ttfa_ms": 1937.734,
+      "total_ms": 32309.099,
+      "audio_s": 70.876
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "long",
+      "prompt_chars": 1171,
+      "mode": "full",
+      "repetition": 2,
+      "ttfa_ms": 32339.993,
+      "total_ms": 32345.421,
+      "audio_s": 70.876
+    },
+    {
+      "scenario": "ttfa",
+      "prompt": "long",
+      "prompt_chars": 1171,
+      "mode": "stream",
+      "repetition": 2,
+      "ttfa_ms": 1832.326,
+      "total_ms": 32605.805,
+      "audio_s": 70.876
+    }
+  ]
+}

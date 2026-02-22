@@ -202,3 +202,20 @@ def test_phoneme_defaults_to_ipa():
 def test_bad_phoneme_elements_are_rejected(markup):
     with pytest.raises(SSMLError):
         parse_ssml(markup)
+
+
+def test_deeply_nested_markup_is_rejected():
+    markup = "<speak>" + "<p>" * 40 + "deep" + "</p>" * 40 + "</speak>"
+    with pytest.raises(SSMLError, match="nested"):
+        parse_ssml(markup)
+
+
+def test_markup_with_too_many_elements_is_rejected():
+    markup = "<speak>" + "<break/>" * 2500 + "text</speak>"
+    with pytest.raises(SSMLError, match="elements"):
+        parse_ssml(markup)
+
+
+def test_reasonable_nesting_is_accepted():
+    markup = "<speak>" + "<p>" * 10 + "fine" + "</p>" * 10 + "</speak>"
+    assert texts(parse_ssml(markup)) == ["fine"]
