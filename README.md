@@ -199,6 +199,76 @@ Load test with 25 concurrent streams:
 kokoro-loadtest --url http://localhost:8000 --streams 25 --json load.json
 ```
 
+## Benchmarks
+
+All numbers below were produced by `kokoro-bench` from this repository and the raw rows are committed in `benchmarks/results/` (one JSON and one CSV per run). Nothing here is copied from another source.
+
+Hardware and software: Intel Core i5-13420H (12 logical cores), Windows 11, Python 3.12.10, onnxruntime 1.32.0, `kokoro-v1.0.int8.onnx` with the 54 voice `voices-v1.0.bin`, espeak-ng phonemizer (misaki was not installed), voice `af_heart`. The service ran in-process on loopback with the Werkzeug threaded server, not Gunicorn and not Docker.
+
+The machine was shared. Every result file records the CPU utilization measured in the second before the run, and in all of them it was 100% from other processes, so the runs were made with `--high-priority` and the absolute numbers are pessimistic and noisy. Run-to-run differences of a factor of two are normal here. Treat the ratios as more meaningful than the absolute milliseconds.
+
+Commands:
+
+```
+python -m kokoro_stream.bench --scenario ttfa --prompts short,medium,long --repetitions 3 \
+  --model-dir models --model-file kokoro-v1.0.int8.onnx --intra-op-threads 4 --workers 4 --depth 3 \
+  --voice af_heart --name ttfa-full-vs-stream --high-priority
+
+python -m kokoro_stream.bench --scenario concurrency --prompts medium --streams 1,5,10,25 --rounds 1 \
+  --model-dir models --model-file kokoro-v1.0.int8.onnx --intra-op-threads 2 --workers 6 --depth 3 \
+  --voice af_heart --name concurrency-medium --high-priority
+
+python -m kokoro_stream.bench.report benchmarks/results/ttfa-full-vs-stream.json
+```
+
+### Time to first audio, full synthesis against streaming
+
+Source: `benchmarks/results/ttfa-full-vs-stream.json`, three repetitions per cell, median of the repetitions. "full" is `POST /v1/tts` (first byte of the WAV response), "stream" is `POST /v1/tts/stream` (first audio frame). The chunk cache was off.
+
+| prompt | audio produced | full | stream |
+|--------|---------------:|-----:|-------:|
+| short, 122 chars | 5.97 s | 11715 ms | 5461 ms |
+| medium, 354 chars | 23.68 s | 30705 ms | 5190 ms |
+| long, 1171 chars | 70.88 s | 43764 ms | 1938 ms |
+
+The streaming figures are not monotonic in prompt length because of the background load: the short prompt happened to run while the machine was busier. The stable result is the shape, the full-synthesis latency grows with the text while streaming latency does not.
+
+### Concurrent streams
+
+Source: `benchmarks/results/concurrency-medium.json`, medium prompt, one round per stream count, all streams started together.
+
+| concurrent streams | TTFA p50 | TTFA p95 | mean real-time factor |
+|-------------------:|---------:|---------:|----------------------:|
+| 1 | 1585 ms | 1585 ms | 0.62 |
+| 5 | 3962 ms | 5148 ms | 1.70 |
+| 10 | 4676 ms | 7836 ms | 2.81 |
+| 25 | 13165 ms | 20339 ms | 6.50 |
+
+On this machine and model the service does not keep up with 25 simultaneous streams: a real-time factor above 1 means audio is produced slower than it plays. The 410 ms single-stream and sub-700 ms 25-stream figures of the original deployment were not reproduced here, they depend on faster CPUs or accelerators and on an idle host. To reproduce on your hardware run the commands above and compare the report.
+
+### Ablations
+
+Source: `benchmarks/results/ablation-*.json`, medium prompt, streaming only, five repetitions, median TTFA, int8 model, 4 intra-op threads, 4 pool workers, depth 3, first chunk 60 characters unless stated.
+
+| variant | median TTFA |
+|---------|------------:|
+| baseline | 1724 ms |
+| lookahead started together with the first chunk (`--no-head-first`) | 2656 ms |
+| first chunk 20 characters | 1210 ms |
+| first chunk 30 characters | 1880 ms |
+| first chunk 40 characters | 1757 ms |
+| first chunk 100 characters | 2763 ms |
+| prefetch depth 1 / 2 / 5 | 2482 / 2120 / 1647 ms |
+| 1 thread x 8 workers / 2 x 4 / 6 x 2 | 5305 / 3639 / 3221 ms |
+| silence trimming off (`--no-trim`) | 2733 ms |
+| fp32 model | 4102 ms |
+
+These are single runs of five repetitions on a loaded host, so only the large gaps mean anything: running the first chunk alone before starting the lookahead, a short first chunk and the int8 model all helped. The depth and trimming differences are inside the noise.
+
+### Not measured
+
+Kafka throughput, end-to-end job latency and the Docker image were not measured, there is no Docker or Kafka broker on the machine used. To reproduce, run `make up`, submit jobs with `POST /v1/jobs` and compare the `queued` and `done` timestamps in the status files, and run `kokoro-loadtest` against the container.
+
 ## Project layout
 
 ```
@@ -207,6 +277,7 @@ src/kokoro_stream/
   audio_io.py          WAV encoding and an incremental WAV writer
   client.py            streaming client and CLI
   loadtest.py          concurrent stream load test
+  bench/               benchmark scenarios, result files and report
   text/                ssml, normalizer, say-as, number words, chunker
   engine/              Kokoro ONNX engine, phonemizers, sine engine, factory
   streaming/           frames, crossfade, prefetch pool, pipeline
