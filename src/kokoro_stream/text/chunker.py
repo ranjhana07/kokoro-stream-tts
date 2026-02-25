@@ -50,19 +50,33 @@ def split_sentences(text: str) -> list[str]:
     return sentences
 
 
+DANGLING_WORDS = frozenset(
+    "a an the and or but of to in on at for with from by as that which who is are was were be".split()
+)
+
+
 def split_words(text: str, limit: int) -> list[str]:
-    pieces: list[str] = []
-    current = ""
-    for word in text.split():
-        candidate = f"{current} {word}".strip()
+    words = text.split()
+    pieces: list[list[str]] = []
+    current: list[str] = []
+    for word in words:
+        candidate = " ".join([*current, word])
         if len(candidate) <= limit or not current:
-            current = candidate
+            current.append(word)
         else:
             pieces.append(current)
-            current = word
+            current = [word]
     if current:
         pieces.append(current)
-    return pieces
+    for index in range(len(pieces) - 1):
+        tail = pieces[index]
+        while len(tail) > 1 and tail[-1].lower().strip(".,;:!?\"'") in DANGLING_WORDS:
+            carried = tail.pop()
+            if len(" ".join([carried, *pieces[index + 1]])) > limit:
+                tail.append(carried)
+                break
+            pieces[index + 1].insert(0, carried)
+    return [" ".join(piece) for piece in pieces if piece]
 
 
 def split_long_sentence(sentence: str, limit: int) -> list[str]:

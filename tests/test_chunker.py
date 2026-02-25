@@ -78,3 +78,17 @@ def test_only_first_speech_chunk_uses_short_limit():
     chunks = plan_chunks(segments, ChunkBudget(first_chars=20, max_chars=200))
     assert len(chunks) == 2
     assert len(chunks[1].text) > 20
+
+
+def test_forced_word_split_does_not_leave_a_dangling_article():
+    text = "Thanks for calling the support line and thanks for waiting"
+    chunks = plan_chunks([SpeechSegment(text)], ChunkBudget(first_chars=22, max_chars=22))
+    assert chunks[0].text == "Thanks for calling"
+    assert " ".join(chunk.text for chunk in chunks) == text
+
+
+def test_dangling_word_stays_when_moving_it_would_overflow():
+    text = "alpha beta the gamma"
+    chunks = plan_chunks([SpeechSegment(text)], ChunkBudget(first_chars=14, max_chars=14))
+    assert " ".join(chunk.text for chunk in chunks) == text
+    assert all(len(chunk.text) <= 14 for chunk in chunks)
