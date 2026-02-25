@@ -65,8 +65,8 @@ class JobWorker:
 
     def process(self, request: JobRequest) -> JobStatus:
         existing = self.store.get(request.job_id)
-        if existing is not None and existing.state is JobState.DONE:
-            logger.info("job %s already done, skipping redelivery", request.job_id)
+        if existing is not None and existing.state in (JobState.DONE, JobState.CANCELLED):
+            logger.info("job %s is %s, skipping", request.job_id, existing.state.value)
             return existing
         self._report(JobStatus(request.job_id, JobState.RUNNING))
         started = time.perf_counter()
