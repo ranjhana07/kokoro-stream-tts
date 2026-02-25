@@ -16,13 +16,17 @@ def instrument_stream(
     started: float,
     request_id: str = "",
     detect_errors: bool = True,
+    bytes_per_second: int = 0,
+    frame_overhead: int = 0,
 ) -> Iterator[bytes]:
     metrics.active_streams.inc()
     first_frame = True
     frame_count = 0
+    audio_bytes = 0
     try:
         for frame in frames:
             frame_count += 1
+            audio_bytes += max(0, len(frame) - frame_overhead)
             if first_frame:
                 metrics.ttfa.observe(time.perf_counter() - started)
                 logger.info("stream %s first frame after %.0f ms", request_id, (time.perf_counter() - started) * 1000)
@@ -33,6 +37,10 @@ def instrument_stream(
             yield frame
     finally:
         logger.info("stream %s closed after %d frames in %.2f s", request_id, frame_count, time.perf_counter() - started)
+        elapsed = time.perf_counter() - started
+        metrics.stream_seconds.inc(elapsed)
+        if bytes_per_second:
+            metrics.audio_seconds.inc(audio_bytes / bytes_per_second)
         metrics.active_streams.dec()
         close = getattr(frames, "close", None)
         if close:

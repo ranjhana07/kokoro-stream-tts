@@ -24,6 +24,7 @@ from kokoro_stream.service.requests import (
     parse_request,
 )
 from kokoro_stream.streaming.cache import ChunkCache
+from kokoro_stream.streaming.frames import HEADER_SIZE
 from kokoro_stream.streaming.pipeline import StreamingSynthesizer
 from kokoro_stream.streaming.prefetch import PrefetchPool
 from kokoro_stream.text.ssml import SSMLError
@@ -132,7 +133,8 @@ def create_app(
             response.status_code = 429
             response.headers["Retry-After"] = "1"
             return response
-        if tts_request.output_format == "frames":
+        is_framed = tts_request.output_format == "frames"
+        if is_framed:
             source = synthesizer.frames(
                 chunks, tts_request.voice, tts_request.speed, tts_request.sample_rate
             )
@@ -145,7 +147,13 @@ def create_app(
             mimetype = "audio/wav" if header else f"audio/L16;rate={tts_request.sample_rate};channels=1"
         body = ReleasingIterator(
             instrument_stream(
-                source, metrics, started, g.request_id, detect_errors=tts_request.output_format == "frames"
+                source,
+                metrics,
+                started,
+                g.request_id,
+                detect_errors=is_framed,
+                bytes_per_second=tts_request.sample_rate * 2,
+                frame_overhead=HEADER_SIZE if is_framed else 0,
             ),
             limiter.release,
         )

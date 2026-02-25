@@ -248,3 +248,13 @@ def test_unknown_format_is_rejected(client):
 def test_non_frame_formats_still_record_ttfa(client):
     client.post("/v1/tts/stream", json={"text": TEXT, "voice": "sine_mid", "format": "pcm"})
     assert "tts_time_to_first_audio_seconds_count 1.0" in client.get("/metrics").data.decode()
+
+
+def test_audio_seconds_metric_tracks_streamed_audio(client):
+    response = client.post("/v1/tts/stream", json={"text": TEXT, "voice": "sine_mid"})
+    frames = decode_all(response.data)
+    seconds = sum(frame.samples().size for frame in frames[:-1]) / 24000
+    body = client.get("/metrics").data.decode()
+    line = next(entry for entry in body.splitlines() if entry.startswith("tts_stream_audio_seconds_total "))
+    assert float(line.split()[1]) == pytest.approx(seconds, abs=0.001)
+    assert "tts_stream_wall_seconds_total" in body
