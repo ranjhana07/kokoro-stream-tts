@@ -259,7 +259,7 @@ Source: `benchmarks/results/ablation-*.json`, medium prompt, streaming only, fiv
 | first chunk 40 characters | 1757 ms |
 | first chunk 100 characters | 2763 ms |
 | prefetch depth 1 / 2 / 5 | 2482 / 2120 / 1647 ms |
-| 1 thread x 8 workers / 2 x 4 / 6 x 2 | 5305 / 3639 / 3221 ms |
+| 1 thread x 8 workers / 2 x 4 / 6 x 2 | 5305 / 3639 / 3222 ms |
 | silence trimming off (`--no-trim`) | 2733 ms |
 | fp32 model | 4102 ms |
 
