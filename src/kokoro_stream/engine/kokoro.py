@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Sequence
 
@@ -10,6 +12,7 @@ from kokoro_stream.engine.base import EngineError
 from kokoro_stream.engine.phonemize import Phonemizer, build_phonemizer
 
 MAX_TOKENS = 510
+TOKEN_CACHE_SIZE = 512
 SAMPLE_RATE = 24000
 
 
@@ -64,14 +67,25 @@ class KokoroEngine:
             self._voices = {name: archive[name] for name in archive.files}
         self._vocab = load_vocab(Path(vocab_path))
         self._phonemizer = phonemizer or build_phonemizer(phonemizer_preference)
+        self._token_cache: OrderedDict[str, tuple[int, ...]] = OrderedDict()
+        self._token_lock = threading.Lock()
 
     def voices(self) -> list[str]:
         return sorted(self._voices)
 
     def tokenize(self, text: str) -> list[int]:
+        with self._token_lock:
+            cached = self._token_cache.get(text)
+            if cached is not None:
+                self._token_cache.move_to_end(text)
+                return list(cached)
         phonemes = self._phonemizer.phonemize(text)
-        tokens = [self._vocab[symbol] for symbol in phonemes if symbol in self._vocab]
-        return tokens[:MAX_TOKENS]
+        tokens = [self._vocab[symbol] for symbol in phonemes if symbol in self._vocab][:MAX_TOKENS]
+        with self._token_lock:
+            self._token_cache[text] = tuple(tokens)
+            while len(self._token_cache) > TOKEN_CACHE_SIZE:
+                self._token_cache.popitem(last=False)
+        return tokens
 
     def synthesize(self, text: str, voice: str, speed: float = 1.0) -> np.ndarray:
         if voice not in self._voices:
