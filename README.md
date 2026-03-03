@@ -176,7 +176,9 @@ Other endpoints:
 | `GET /healthz` | liveness and engine name |
 | `GET /metrics` | Prometheus metrics: `tts_time_to_first_audio_seconds`, `tts_active_streams`, `tts_chunk_synthesis_seconds` |
 | `POST /v1/jobs` | queue a long-form job, returns `202` with a job id |
-| `GET /v1/jobs/<id>` | job state: `queued`, `running`, `done`, `failed` |
+| `GET /v1/jobs/<id>` | job state: `queued`, `running`, `done`, `failed`, `cancelled` |
+| `DELETE /v1/jobs/<id>` | cancel a job that is still queued |
+| `GET /v1/jobs/<id>/audio` | download the WAV of a finished job (local output only) |
 
 Request fields for `/v1/tts` and `/v1/tts/stream`: `text` (plain text or SSML), `voice`, `speed` (0.5 to 2.0) and `sample_rate` (8000 to 48000, the audio is resampled on the service side).
 
