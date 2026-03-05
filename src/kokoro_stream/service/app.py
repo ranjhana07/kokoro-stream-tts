@@ -185,6 +185,17 @@ def create_app(
             return jsonify(error="job not found"), 404
         return jsonify(status.to_dict())
 
+    @app.delete("/v1/jobs/<job_id>")
+    def cancel_job(job_id: str):
+        status = job_store.get(job_id)
+        if status is None:
+            return jsonify(error="job not found"), 404
+        if status.state is not JobState.QUEUED:
+            return jsonify(error=f"job is {status.state.value} and cannot be cancelled"), 409
+        cancelled = JobStatus(job_id, JobState.CANCELLED, detail="cancelled by request")
+        job_store.put(cancelled)
+        return jsonify(cancelled.to_dict())
+
     @app.get("/v1/jobs/<job_id>/audio")
     def job_audio(job_id: str):
         status = job_store.get(job_id)

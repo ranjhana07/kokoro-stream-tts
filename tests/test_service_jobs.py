@@ -124,3 +124,25 @@ def test_s3_outputs_are_reported_as_locations(tmp_path):
     job_id = new_job_id()
     store.put(JobStatus(job_id, JobState.DONE, output="s3://bucket/a.wav"))
     assert client.get(f"/v1/jobs/{job_id}/audio").json == {"location": "s3://bucket/a.wav"}
+
+
+def test_queued_job_can_be_cancelled(tmp_path):
+    client, store = make_client_with_output(tmp_path)
+    job_id = client.post("/v1/jobs", json={"text": "Hello there."}).json["job_id"]
+    response = client.delete(f"/v1/jobs/{job_id}")
+    assert response.status_code == 200
+    assert response.json["state"] == "cancelled"
+    assert store.get(job_id).state is JobState.CANCELLED
+
+
+def test_running_and_finished_jobs_cannot_be_cancelled(tmp_path):
+    client, store = make_client_with_output(tmp_path)
+    for state in (JobState.RUNNING, JobState.DONE, JobState.FAILED):
+        job_id = new_job_id()
+        store.put(JobStatus(job_id, state))
+        assert client.delete(f"/v1/jobs/{job_id}").status_code == 409
+
+
+def test_cancelling_an_unknown_job_is_404(tmp_path):
+    client, _ = make_client_with_output(tmp_path)
+    assert client.delete(f"/v1/jobs/{new_job_id()}").status_code == 404

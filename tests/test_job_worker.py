@@ -134,3 +134,14 @@ def test_redelivered_finished_job_is_not_synthesized_again(worker, tmp_path):
     assert second == first
     assert output.read_bytes() == b"marker"
     assert len(worker.publisher.statuses) == published_before
+
+
+def test_cancelled_job_is_not_synthesized(worker, tmp_path):
+    from kokoro_stream.jobs.models import JobStatus
+
+    request = JobRequest(new_job_id(), LONG_TEXT, "sine_mid")
+    worker.store.put(JobStatus(request.job_id, JobState.CANCELLED))
+    status = worker.process(request)
+    assert status.state is JobState.CANCELLED
+    assert not (tmp_path / "audio" / f"{request.job_id}.wav").exists()
+    assert worker.publisher.statuses == []

@@ -15,6 +15,7 @@ class JobState(str, Enum):
     RUNNING = "running"
     DONE = "done"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 def new_job_id() -> str:
