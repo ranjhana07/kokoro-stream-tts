@@ -41,12 +41,19 @@ services:
     volumes:
       - ./models:/app/models:ro
       - tts-output:/app/output
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       kafka:
         condition: service_healthy
 
   worker:
     build: .
+    restart: unless-stopped
     command: ["python", "-m", "kokoro_stream.jobs.worker"]
     environment: *tts-env
     volumes:
