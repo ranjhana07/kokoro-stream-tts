@@ -25,6 +25,7 @@ class KafkaJobPublisher:
         status_topic: str,
         producer: Any | None = None,
         dead_letter_topic: str = "tts.jobs.dead",
+        client_config: dict[str, Any] | None = None,
     ) -> None:
         if producer is None:
             from confluent_kafka import Producer
@@ -35,6 +36,7 @@ class KafkaJobPublisher:
                     "enable.idempotence": True,
                     "linger.ms": 5,
                     "client.id": "kokoro-stream-tts",
+                    **(client_config or {}),
                 }
             )
         self.request_topic = request_topic
@@ -66,7 +68,18 @@ class KafkaJobPublisher:
             logger.error("kafka delivery failed: %s", error)
 
 
-def build_consumer(bootstrap: str, group: str, topic: str) -> Any:
+def parse_client_config(raw: str) -> dict[str, Any]:
+    if not raw.strip():
+        return {}
+    config = json.loads(raw)
+    if not isinstance(config, dict):
+        raise ValueError("KAFKA_CLIENT_CONFIG must be a JSON object")
+    return config
+
+
+def build_consumer(
+    bootstrap: str, group: str, topic: str, client_config: dict[str, Any] | None = None
+) -> Any:
     from confluent_kafka import Consumer
 
     consumer = Consumer(
@@ -77,6 +90,7 @@ def build_consumer(bootstrap: str, group: str, topic: str) -> Any:
             "enable.auto.commit": False,
             "max.poll.interval.ms": 900_000,
             "session.timeout.ms": 30_000,
+            **(client_config or {}),
         }
     )
     consumer.subscribe([topic])

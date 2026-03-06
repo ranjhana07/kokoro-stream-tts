@@ -10,7 +10,7 @@ from kokoro_stream.audio_io import encode_wav, streaming_wav_header
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import EngineError, SpeechEngine, warm_up
 from kokoro_stream.engine.factory import build_engine
-from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher
+from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher, parse_client_config
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus, new_job_id
 from kokoro_stream.jobs.store import FileJobStore, JobStore
 from kokoro_stream.service.auth import OPEN_ENDPOINTS, extract_token, is_authorized
@@ -40,7 +40,11 @@ def create_app(
     engine = engine or build_engine(settings)
     if publisher is None and settings.kafka_bootstrap:
         publisher = KafkaJobPublisher(
-            settings.kafka_bootstrap, settings.kafka_request_topic, settings.kafka_status_topic
+            settings.kafka_bootstrap,
+            settings.kafka_request_topic,
+            settings.kafka_status_topic,
+            dead_letter_topic=settings.kafka_dead_letter_topic,
+            client_config=parse_client_config(settings.kafka_client_config),
         )
     job_store = job_store or FileJobStore(Path(settings.output_dir) / "status")
     voices_available = engine.voices()

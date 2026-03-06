@@ -14,7 +14,12 @@ from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import EngineError, warm_up
 from kokoro_stream.engine.factory import build_engine
 from kokoro_stream.logging_setup import configure_logging
-from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher, build_consumer
+from kokoro_stream.jobs.kafka_io import (
+    JobPublisher,
+    KafkaJobPublisher,
+    build_consumer,
+    parse_client_config,
+)
 from kokoro_stream.jobs.metrics import JobMetrics
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus
 from kokoro_stream.jobs.sinks import OutputSink, sink_for
@@ -139,6 +144,7 @@ def main() -> int:
         voices = engine.voices()
         voice = settings.default_voice if settings.default_voice in voices else voices[0]
         logger.info("engine warm-up took %.2f s", warm_up(engine, voice))
+    client_config = parse_client_config(settings.kafka_client_config)
     metrics = JobMetrics()
     if settings.worker_metrics_port:
         metrics.serve(settings.worker_metrics_port)
@@ -154,12 +160,15 @@ def main() -> int:
             settings.kafka_request_topic,
             settings.kafka_status_topic,
             dead_letter_topic=settings.kafka_dead_letter_topic,
+            client_config=client_config,
         ),
         work_dir=output / "tmp",
         max_attempts=settings.job_max_attempts,
         metrics=metrics,
     )
-    consumer = build_consumer(settings.kafka_bootstrap, settings.kafka_group, settings.kafka_request_topic)
+    consumer = build_consumer(
+        settings.kafka_bootstrap, settings.kafka_group, settings.kafka_request_topic, client_config
+    )
     stop = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stop.set())
     signal.signal(signal.SIGINT, lambda *_: stop.set())

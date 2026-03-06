@@ -50,6 +50,7 @@ class Settings:
     kafka_status_topic: str = "tts.jobs.status"
     kafka_dead_letter_topic: str = "tts.jobs.dead"
     kafka_group: str = "tts-workers"
+    kafka_client_config: str = ""
     job_max_attempts: int = 3
     worker_metrics_port: int = 9100
     output_dir: str = "output"
@@ -106,6 +107,7 @@ class Settings:
             kafka_status_topic=env.get("KAFKA_STATUS_TOPIC", defaults.kafka_status_topic),
             kafka_dead_letter_topic=env.get("KAFKA_DEAD_LETTER_TOPIC", defaults.kafka_dead_letter_topic),
             kafka_group=env.get("KAFKA_GROUP", defaults.kafka_group),
+            kafka_client_config=env.get("KAFKA_CLIENT_CONFIG", defaults.kafka_client_config),
             job_max_attempts=_read_int(env, "JOB_MAX_ATTEMPTS", defaults.job_max_attempts),
             worker_metrics_port=_read_int(env, "WORKER_METRICS_PORT", defaults.worker_metrics_port),
             output_dir=env.get("OUTPUT_DIR", defaults.output_dir),

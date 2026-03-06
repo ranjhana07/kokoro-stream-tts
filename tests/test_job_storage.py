@@ -125,3 +125,15 @@ def test_request_attempts_default_and_round_trip():
     assert JobRequest.from_json(retried.to_json()).attempts == 2
     legacy = json.dumps({"job_id": request.job_id, "text": "Hi.", "voice": "v"})
     assert JobRequest.from_json(legacy).attempts == 0
+
+
+def test_client_config_is_parsed_from_json():
+    from kokoro_stream.jobs.kafka_io import parse_client_config
+
+    assert parse_client_config("") == {}
+    assert parse_client_config('{"security.protocol": "SASL_SSL", "sasl.mechanisms": "PLAIN"}') == {
+        "security.protocol": "SASL_SSL",
+        "sasl.mechanisms": "PLAIN",
+    }
+    with pytest.raises(ValueError):
+        parse_client_config("[1, 2]")
