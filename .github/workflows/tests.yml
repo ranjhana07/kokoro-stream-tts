@@ -18,5 +18,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - run: pip install -e ".[dev]"
+      - run: pip install pyflakes
+      - run: python -m pyflakes src tests
       - run: python -m compileall -q src
       - run: python -m pytest -q
