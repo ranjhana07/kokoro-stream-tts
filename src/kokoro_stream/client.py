@@ -108,6 +108,27 @@ def stream_speech(
     raise StreamError("stream ended without an end frame")
 
 
+class Player:
+    def __init__(self) -> None:
+        try:
+            import sounddevice
+        except ImportError as error:
+            raise StreamError("playback needs the sounddevice package") from error
+        self._sounddevice = sounddevice
+        self._stream = None
+
+    def write(self, samples: np.ndarray, sample_rate: int) -> None:
+        if self._stream is None:
+            self._stream = self._sounddevice.OutputStream(samplerate=sample_rate, channels=1, dtype="float32")
+            self._stream.start()
+        self._stream.write(samples.reshape(-1, 1).astype(np.float32))
+
+    def close(self) -> None:
+        if self._stream is not None:
+            self._stream.stop()
+            self._stream.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kokoro-client", description="Stream speech from a kokoro-stream-tts server")
     parser.add_argument("--url", default="http://localhost:8000")
@@ -120,6 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--retries", type=int, default=0, help="retries when the service answers 429 or 503")
     parser.add_argument("--api-key", default=os.environ.get("KOKORO_API_KEY"))
     parser.add_argument("--out", type=Path, help="write the stream to a WAV file")
+    parser.add_argument("--play", action="store_true", help="play the audio while it streams, needs sounddevice")
     return parser
 
 
@@ -127,6 +149,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     text = args.text if args.text is not None else args.file.read_text(encoding="utf-8")
     writer: WavFileWriter | None = None
+    try:
+        player = Player() if args.play else None
+    except StreamError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
 
     def handle_audio(samples: np.ndarray, sample_rate: int) -> None:
         nonlocal writer
@@ -134,6 +161,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             writer = WavFileWriter(args.out, sample_rate)
         if writer:
             writer.write_float(samples)
+        if player:
+            player.write(samples, sample_rate)
 
     try:
         result = stream_speech(
@@ -152,6 +181,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         if writer:
             writer.close()
+        if player:
+            player.close()
     print(
         f"frames={result.frame_count} audio={result.audio_seconds:.2f}s "
         f"ttfa={result.time_to_first_audio * 1000:.0f}ms total={result.total_seconds:.2f}s "

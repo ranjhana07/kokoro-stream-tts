@@ -65,3 +65,33 @@ def test_client_retries_until_a_slot_frees_up(full_service):
     result = stream_speech(full_service, "Short text.", "sine_mid", retries=8)
     assert result.frame_count >= 1
     holder.join()
+
+
+def test_play_without_sounddevice_fails_cleanly(monkeypatch, capsys):
+    import builtins
+
+    from kokoro_stream.client import main
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "sounddevice":
+            raise ImportError("missing")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    assert main(["--text", "hello", "--play"]) == 1
+    assert "sounddevice" in capsys.readouterr().err
+
+
+def test_cli_writes_a_wav_file(full_service, tmp_path, capsys):
+    import wave
+
+    from kokoro_stream.client import main
+
+    output = tmp_path / "out.wav"
+    assert main(["--url", full_service, "--text", "A short line to write.", "--voice", "sine_mid", "--out", str(output)]) == 0
+    with wave.open(str(output)) as reader:
+        assert reader.getframerate() == 24000
+        assert reader.getnframes() > 0
+    assert "ttfa=" in capsys.readouterr().out

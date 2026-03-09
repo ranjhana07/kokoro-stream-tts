@@ -25,6 +25,7 @@ dependencies = [
 kokoro = ["onnxruntime>=1.18", "misaki[en]>=0.9", "phonemizer-fork>=3.3", "espeakng-loader>=0.2"]
 kafka = ["confluent-kafka>=2.4", "boto3>=1.34"]
 serve = ["gunicorn>=22.0"]
+play = ["sounddevice>=0.4"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]
