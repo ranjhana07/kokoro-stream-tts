@@ -219,3 +219,17 @@ def test_markup_with_too_many_elements_is_rejected():
 def test_reasonable_nesting_is_accepted():
     markup = "<speak>" + "<p>" * 10 + "fine" + "</p>" * 10 + "</speak>"
     assert texts(parse_ssml(markup)) == ["fine"]
+
+
+def test_unknown_elements_are_transparent():
+    markup = '<speak>Hello <mark name="m1"/><lang xml:lang="en-US">there</lang> <audio src="x"/>friend.</speak>'
+    assert texts(parse_ssml(markup)) == ["Hello there friend."]
+
+
+def test_element_names_are_case_insensitive():
+    segments = parse_ssml("<speak>One.<BREAK time='200ms'/>Two.</speak>")
+    assert segments == [SpeechSegment("One."), PauseSegment(200), SpeechSegment("Two.")]
+
+
+def test_xml_entities_are_decoded_once():
+    assert texts(parse_ssml("<speak>Fish &amp; chips &lt;3</speak>")) == ["Fish and chips <three"]
