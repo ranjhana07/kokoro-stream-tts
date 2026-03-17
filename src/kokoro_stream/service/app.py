@@ -10,6 +10,7 @@ from kokoro_stream.audio_io import encode_wav, streaming_wav_header
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import EngineError, SpeechEngine, warm_up
 from kokoro_stream.engine.factory import build_engine
+from kokoro_stream.engine.voice_info import describe_voice
 from kokoro_stream.jobs.kafka_io import JobPublisher, KafkaJobPublisher, parse_client_config
 from kokoro_stream.jobs.models import JobRequest, JobState, JobStatus, new_job_id
 from kokoro_stream.jobs.store import FileJobStore, JobStore
@@ -112,7 +113,11 @@ def create_app(
 
     @app.get("/v1/voices")
     def voices():
-        return jsonify(voices=voices_available, default=default_voice)
+        return jsonify(
+            voices=voices_available,
+            default=default_voice,
+            details=[describe_voice(name) for name in voices_available],
+        )
 
     @app.post("/v1/tts")
     def tts():

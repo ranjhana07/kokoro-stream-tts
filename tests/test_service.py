@@ -258,3 +258,8 @@ def test_audio_seconds_metric_tracks_streamed_audio(client):
     line = next(entry for entry in body.splitlines() if entry.startswith("tts_stream_audio_seconds_total "))
     assert float(line.split()[1]) == pytest.approx(seconds, abs=0.001)
     assert "tts_stream_wall_seconds_total" in body
+
+
+def test_voice_details_are_listed(client):
+    details = client.get("/v1/voices").json["details"]
+    assert [entry["name"] for entry in details] == ["sine_low", "sine_mid", "sine_high"]
