@@ -94,8 +94,14 @@ def stream_speech(
                 if frame.frame_type is FrameType.ERROR:
                     raise StreamError(frame.message())
                 if frame.frame_type is FrameType.END:
+                    if frame.sequence != result.frame_count:
+                        raise StreamError(
+                            f"end frame reports {frame.sequence} audio frames, received {result.frame_count}"
+                        )
                     result.total_seconds = now
                     return result
+                if frame.sequence != result.frame_count:
+                    raise StreamError(f"frame {frame.sequence} arrived where {result.frame_count} was expected")
                 if result.frame_count == 0:
                     result.time_to_first_audio = now
                 result.sample_rate = frame.sample_rate
