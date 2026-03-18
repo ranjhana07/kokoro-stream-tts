@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import statistics
@@ -77,6 +78,22 @@ def summarize(samples: Sequence[StreamSample]) -> dict[str, float | int]:
     }
 
 
+def write_csv(path: Path, samples: Sequence[StreamSample]) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["ttfa_ms", "total_ms", "audio_s", "rtf", "error"])
+        for sample in samples:
+            writer.writerow(
+                [
+                    round(sample.ttfa * 1000, 3),
+                    round(sample.total * 1000, 3),
+                    round(sample.audio_seconds, 3),
+                    round(sample.real_time_factor, 4),
+                    sample.error or "",
+                ]
+            )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kokoro-loadtest", description="Open concurrent streams and report TTFA and real-time factor")
     parser.add_argument("--url", default="http://localhost:8000")
@@ -86,7 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-key", default=os.environ.get("KOKORO_API_KEY"))
     parser.add_argument("--text")
     parser.add_argument("--file", type=Path)
+    parser.add_argument("--rounds", type=int, default=1, help="repeat the whole set of streams this many times")
     parser.add_argument("--json", type=Path, help="write the summary to this file")
+    parser.add_argument("--csv", type=Path, help="write one row per stream to this file")
     return parser
 
 
@@ -96,10 +115,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         text = args.file.read_text(encoding="utf-8")
     else:
         text = args.text or DEFAULT_TEXT
-    samples = run_streams(
-        lambda: stream_speech(args.url, text, args.voice, args.speed, api_key=args.api_key),
-        args.streams,
-    )
+    samples: list[StreamSample] = []
+    for _ in range(max(1, args.rounds)):
+        samples.extend(
+            run_streams(
+                lambda: stream_speech(args.url, text, args.voice, args.speed, api_key=args.api_key),
+                args.streams,
+            )
+        )
     summary = summarize(samples)
     print(f"streams      {summary['streams']}  errors {summary['errors']}")
     print(f"ttfa p50     {summary['ttfa_p50_ms']:.0f} ms")
@@ -110,6 +133,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.json:
         payload = {"summary": summary, "samples": [asdict(sample) for sample in samples]}
         args.json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    if args.csv:
+        write_csv(args.csv, samples)
     return 1 if summary["errors"] else 0
 
 

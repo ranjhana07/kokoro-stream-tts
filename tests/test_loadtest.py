@@ -105,3 +105,25 @@ def test_client_sends_api_key():
     finally:
         server.shutdown()
         thread.join(timeout=5)
+
+
+def test_main_runs_rounds_and_writes_csv_and_json(live_server, tmp_path, capsys):
+    import json
+
+    from kokoro_stream.loadtest import main
+
+    csv_path = tmp_path / "samples.csv"
+    json_path = tmp_path / "summary.json"
+    code = main(
+        [
+            "--url", live_server, "--streams", "3", "--rounds", "2", "--voice", "sine_mid",
+            "--text", "A short sentence. And another short one.",
+            "--csv", str(csv_path), "--json", str(json_path),
+        ]
+    )
+    assert code == 0
+    lines = csv_path.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "ttfa_ms,total_ms,audio_s,rtf,error"
+    assert len(lines) == 1 + 6
+    assert json.loads(json_path.read_text(encoding="utf-8"))["summary"]["streams"] == 6
+    assert "ttfa p50" in capsys.readouterr().out
