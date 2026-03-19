@@ -226,3 +226,32 @@ def test_head_first_setting_reaches_the_prefetcher(pool, settings):
         starts.append(engine.calls)
         iterator.close()
     assert starts[0] <= starts[1]
+
+
+class FailsOnThirdChunk:
+    sample_rate = 24000
+
+    def __init__(self):
+        self.calls = 0
+
+    def voices(self):
+        return ["v"]
+
+    def synthesize(self, text, voice, speed=1.0):
+        self.calls += 1
+        if "third" in text:
+            raise RuntimeError("synthesis crashed")
+        return np.full(6000, 0.2, dtype=np.float32)
+
+
+def test_failure_after_partial_audio_ends_with_an_error_frame(pool, settings):
+    synthesizer = StreamingSynthesizer(FailsOnThirdChunk(), pool, settings)
+    chunks = synthesizer.prepare("The first one is fine. The second one is fine too. The third one will fail. The fourth never runs.")
+    frames = decode_all(b"".join(synthesizer.frames(chunks, "v")))
+    kinds = [frame.frame_type for frame in frames]
+    assert kinds[-1] is FrameType.ERROR
+    assert FrameType.AUDIO in kinds
+    assert FrameType.END not in kinds
+    assert "synthesis crashed" in frames[-1].message()
+    audio_frames = [frame for frame in frames if frame.frame_type is FrameType.AUDIO]
+    assert frames[-1].sequence == len(audio_frames)
