@@ -136,6 +136,7 @@ def create_app(
         started = time.perf_counter()
         tts_request = read_request(settings.max_text_chars)
         chunks = synthesizer.prepare(tts_request.text)
+        prepare_ms = (time.perf_counter() - started) * 1000
         if not limiter.try_acquire():
             metrics.rejected_streams.inc()
             response = jsonify(error="too many concurrent streams")
@@ -168,6 +169,7 @@ def create_app(
         )
         response = Response(body, mimetype=mimetype)
         response.headers["X-Sample-Rate"] = str(tts_request.sample_rate)
+        response.headers["Server-Timing"] = f"prepare;dur={prepare_ms:.1f}, chunks;desc=\"{len(chunks)}\""
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Accel-Buffering"] = "no"
         return response

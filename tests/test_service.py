@@ -263,3 +263,11 @@ def test_audio_seconds_metric_tracks_streamed_audio(client):
 def test_voice_details_are_listed(client):
     details = client.get("/v1/voices").json["details"]
     assert [entry["name"] for entry in details] == ["sine_low", "sine_mid", "sine_high"]
+
+
+def test_stream_reports_prepare_time_and_chunk_count(client):
+    response = client.post("/v1/tts/stream", json={"text": TEXT, "voice": "sine_mid"})
+    timing = response.headers["Server-Timing"]
+    assert timing.startswith("prepare;dur=")
+    chunk_count = int(timing.split('chunks;desc="')[1].rstrip('"'))
+    assert chunk_count >= 2
