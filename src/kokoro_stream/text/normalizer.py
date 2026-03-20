@@ -75,6 +75,8 @@ INTEGER_PATTERN = re.compile(r"(?<![\w.])(-?)(\d{1,3}(?:,\d{3})+|\d+)(?![\w])")
 SPACES_PATTERN = re.compile(r"[ \t]+")
 ABBREVIATION_PATTERN = re.compile(r"\b(" + "|".join(ABBREVIATIONS) + r")\.(?=\s)")
 LATIN_PATTERN = re.compile(r"(?<![\w.])(e\.g\.|i\.e\.|etc\.)", re.IGNORECASE)
+REPEATED_PUNCTUATION_PATTERN = re.compile(r"([!?])[!?]+")
+PLUS_NUMBER_PATTERN = re.compile(r"(?<![\w+])\+(\d)")
 AMPERSAND_PATTERN = re.compile(r"\s&\s")
 HASH_PATTERN = re.compile(r"#(\d+)")
 LONG_DATE_PATTERN = re.compile(
@@ -311,6 +313,8 @@ def expand_integer(match: re.Match[str]) -> str:
 PASSES: tuple[Callable[[str], str], ...] = (
     lambda text: LATIN_PATTERN.sub(expand_latin, text),
     lambda text: ABBREVIATION_PATTERN.sub(expand_abbreviation, text),
+    lambda text: REPEATED_PUNCTUATION_PATTERN.sub(lambda match: match.group(1), text),
+    lambda text: PLUS_NUMBER_PATTERN.sub(lambda match: "plus " + match.group(1), text),
     lambda text: AMPERSAND_PATTERN.sub(" and ", text),
     lambda text: HASH_PATTERN.sub(lambda match: f"number {say_integer(match.group(1))}", text),
     lambda text: SECTION_ROMAN_PATTERN.sub(expand_section_roman, text),

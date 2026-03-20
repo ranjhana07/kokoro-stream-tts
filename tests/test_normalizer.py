@@ -150,3 +150,18 @@ def test_currency_magnitude_suffixes(raw, expected):
 )
 def test_roman_numerals(raw, expected):
     assert normalize_text(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("Really?!?!", "Really?"),
+        ("Stop!!!", "Stop!"),
+        ("temperature +5 today", "temperature plus five today"),
+        ("it went from -3 to +4", "it went from minus three to plus four"),
+        ("C++ is fine", "C++ is fine"),
+        ("Wait... what", "Wait... what"),
+    ],
+)
+def test_punctuation_runs_and_plus_signs(raw, expected):
+    assert normalize_text(raw) == expected
