@@ -53,3 +53,19 @@ def test_phonemizer_choice_is_validated():
     assert Settings.from_env({"KOKORO_PHONEMIZER": "espeak"}).phonemizer == "espeak"
     with pytest.raises(ValueError):
         Settings.from_env({"KOKORO_PHONEMIZER": "festival"})
+
+
+def test_settings_can_be_loaded_from_an_env_file(tmp_path):
+    path = tmp_path / ".env"
+    path.write_text(
+        "# local overrides\nKOKORO_ENGINE=kokoro\nPREFETCH_DEPTH = 4\nDEFAULT_VOICE=\"am_adam\"\n\nnot a setting\n",
+        encoding="utf-8",
+    )
+    settings = Settings.from_file(path)
+    assert (settings.engine, settings.prefetch_depth, settings.default_voice) == ("kokoro", 4, "am_adam")
+
+
+def test_explicit_overrides_win_over_the_file(tmp_path):
+    path = tmp_path / ".env"
+    path.write_text("PREFETCH_DEPTH=4\n", encoding="utf-8")
+    assert Settings.from_file(path, {"PREFETCH_DEPTH": "6"}).prefetch_depth == 6

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Mapping
 
 
@@ -24,6 +25,17 @@ def _read_list(environ: Mapping[str, str], name: str, default: tuple[str, ...]) 
     if raw is None or raw.strip() == "":
         return default
     return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        values[key.strip()] = value.strip().strip("\"'")
+    return values
 
 
 @dataclass(frozen=True)
@@ -79,6 +91,12 @@ class Settings:
         if self.intra_op_threads < 1:
             raise ValueError("KOKORO_INTRA_OP_THREADS must be at least 1")
         return self
+
+    @classmethod
+    def from_file(cls, path: Path, overrides: Mapping[str, str] | None = None) -> "Settings":
+        merged = read_env_file(path)
+        merged.update(overrides or {})
+        return cls.from_env(merged)
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Settings":
