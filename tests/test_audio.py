@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from kokoro_stream.streaming.audio import trim_silence
+from kokoro_stream.streaming.audio import resample, trim_silence
 
 RATE = 24000
 
@@ -39,8 +39,6 @@ def test_quiet_noise_below_threshold_is_removed():
     trimmed = trim_silence(padded, RATE, threshold_db=-50.0, keep_ms=5)
     assert len(trimmed) < 2400 + 2 * int(RATE * 0.005) + 400
 
-
-from kokoro_stream.streaming.audio import resample
 
 
 def sine(frequency, rate, seconds=0.5):
