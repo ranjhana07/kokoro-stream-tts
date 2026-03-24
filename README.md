@@ -124,6 +124,8 @@ Everything is read from environment variables. `.env.example` lists them all.
 | `TRIM_SILENCE` | `1` | trim leading and trailing silence from each synthesized chunk |
 | `CHUNK_CACHE_MB` | `32` | LRU cache of synthesized chunks, `0` disables it |
 | `MAX_STREAMS` | `64` | concurrent streams before the service answers `429`, `0` for no limit |
+| `KAFKA_CLIENT_CONFIG` | empty | JSON object merged into the producer and consumer settings, for example SASL options |
+| `PREFETCH_HEAD_FIRST` | `1` | synthesize the first chunk alone, the lookahead chunks start when it is ready |
 | `API_KEYS` | empty | comma separated keys; when set, requests need `Authorization: Bearer <key>` or `X-API-Key` |
 | `WARMUP` | `1` | run two short syntheses before accepting traffic |
 | `MAX_TEXT_CHARS` | `5000` | request size limit for streaming and WAV endpoints |
@@ -186,6 +188,10 @@ Request fields for `/v1/tts` and `/v1/tts/stream`: `text` (plain text or SSML), 
 
 Jobs that fail with a transient error are put back on the request topic with an incremented attempt counter. After `JOB_MAX_ATTEMPTS` the job is marked `failed` and the request is published to the dead-letter topic with the failure reason. A redelivered message for a job that is already `done` is ignored.
 
+The client verifies that frame sequence numbers are contiguous and that the end frame carries the number of audio frames it received, so a dropped frame is an error and not silent audio. `--retries N` retries on `429` and `503`, waiting for `Retry-After`. `--play` plays the audio while it streams and needs `pip install -e ".[play]"`.
+
+`/v1/voices` returns the voice names, the default, and `details` with the language and gender decoded from Kokoro style names. Streaming responses carry a `Server-Timing` header with the time spent preparing the text and the number of chunks, plus `X-Request-ID`.
+
 Python client:
 
 ```python
@@ -195,10 +201,10 @@ result = stream_speech("http://localhost:8000", "Hello there. This is streamed."
 print(result.time_to_first_audio, result.real_time_factor)
 ```
 
-Load test with 25 concurrent streams:
+Load test with 25 concurrent streams, repeated for three rounds, with one CSV row per stream:
 
 ```
-kokoro-loadtest --url http://localhost:8000 --streams 25 --json load.json
+kokoro-loadtest --url http://localhost:8000 --streams 25 --rounds 3 --json load.json --csv load.csv
 ```
 
 ## Benchmarks
@@ -283,7 +289,7 @@ src/kokoro_stream/
   text/                ssml, normalizer, say-as, number words, chunker
   engine/              Kokoro ONNX engine, phonemizers, sine engine, factory
   streaming/           frames, crossfade, prefetch pool, pipeline
-  service/             Flask app and Prometheus metrics
+  service/             Flask app, request parsing, auth, stream limiter, Prometheus metrics
   jobs/                Kafka publisher/consumer, worker, status store, sinks
 tests/                 pytest suite, runs without weights, Kafka or network
 ```
