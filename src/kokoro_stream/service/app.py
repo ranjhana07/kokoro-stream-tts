@@ -6,6 +6,7 @@ from pathlib import Path
 
 from flask import Flask, Response, g, jsonify, request, send_file
 
+from kokoro_stream import __version__
 from kokoro_stream.audio_io import encode_wav, streaming_wav_header
 from kokoro_stream.config import Settings
 from kokoro_stream.engine.base import EngineError, SpeechEngine, warm_up
@@ -109,7 +110,12 @@ def create_app(
 
     @app.get("/healthz")
     def healthz():
-        return jsonify(status="ok", engine=type(engine).__name__, sample_rate=engine.sample_rate)
+        return jsonify(
+            status="ok",
+            version=__version__,
+            engine=type(engine).__name__,
+            sample_rate=engine.sample_rate,
+        )
 
     @app.get("/v1/voices")
     def voices():
